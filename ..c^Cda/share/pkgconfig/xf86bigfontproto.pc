@@ -1,0 +1,7 @@
+prefix=/home/moja/Documents/YonseiProjects/DigitalMicroelectronics/DEVSIM_PROJECT/..c^Cda
+includedir=${prefix}/include
+
+Name: XF86BigFontProto
+Description: XF86BigFont extension headers
+Version: 1.2.0
+Cflags: -I${includedir}

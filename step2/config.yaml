@@ -1,0 +1,37 @@
+device:
+  gate_length_um: 1.0
+  source_length_um: 0.5
+  drain_length_um: 0.5
+  oxide_thickness_nm: 10.0
+  silicon_thickness_um: 0.5
+  junction_depth_um: 0.1
+  body_doping_cm3: 1.0e+16
+  sd_doping_cm3: 1.0e+19
+  temperature_k: 300.0
+sweeps:
+  idvg:
+    drain_v: 1.0
+    start_v: 0.0
+    stop_v: 5.0
+    step_v: 0.1
+  # idvd / cv 스윕 설정은 2단계 과제를 구현한 뒤 여기에 추가해 보자
+  # Added idvd and cv
+  idvd:
+    gate_v: 1.0
+    start_v: 0.0
+    stop_v: 2.0
+    step_v: 0.1
+  cv:
+    start_v: -3.0
+    stop_v: 5.0
+    step_v: 0.1
+
+# compare_tcad.py가 읽는 부분: 기본 소자에서 바꿀 옵션만 적으면
+# 소자별 곡선이 한 그래프에 그려진다. 이름과 옵션은 자유롭게 수정 가능.
+compare:
+  tox 5 nm:
+    oxide_thickness_nm: 5.0
+  tox 10 nm:
+    oxide_thickness_nm: 10.0
+  tox 20 nm:
+    oxide_thickness_nm: 20.0

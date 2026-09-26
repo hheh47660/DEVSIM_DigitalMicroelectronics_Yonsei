@@ -1,0 +1,13 @@
+prefix=/home/moja/Documents/YonseiProjects/DigitalMicroelectronics/DEVSIM_PROJECT/..c^Cda
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+modules=1
+
+Name: libXML
+Version: 2.13.9
+Description: libXML library version2.
+Requires.private:  icu-i18n
+Libs: -L${libdir} -lxml2 
+Libs.private:  -L/home/moja/Documents/YonseiProjects/DigitalMicroelectronics/DEVSIM_PROJECT/..c^Cda/lib -lz -L/home/moja/Documents/YonseiProjects/DigitalMicroelectronics/DEVSIM_PROJECT/..c^Cda/lib -llzma  -L/home/moja/Documents/YonseiProjects/DigitalMicroelectronics/DEVSIM_PROJECT/..c^Cda/lib  -lm   
+Cflags: -I${includedir}/libxml2 -I/home/moja/Documents/YonseiProjects/DigitalMicroelectronics/DEVSIM_PROJECT/..c^Cda/include 

@@ -1,0 +1,14 @@
+name: devsim-project
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - mkl
+  - numpy>=2.0,<3
+  - pandas>=2.2,<4
+  - pip:
+      - devsim==2.10.0
+      - plotly>=6,<7
+      - streamlit>=1.45,<2
+      - pyyaml>=6,<7

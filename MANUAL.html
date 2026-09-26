@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DEVSIM PROJECT · 코드로 소자 모델링 및 시뮬레이션</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f7fb; --surface: #ffffff; --surface-2: #eef3f8;
+      --text: #172033; --muted: #5f6b7a; --border: #d8e0ea;
+      --primary: #2457d6; --primary-soft: #e8efff; --accent: #138a72; --warn: #b4660a;
+      --series-1: #2457d6; --series-2: #138a72; --series-3: #b4660a;
+      --series-4: #9b4db5; --series-5: #d3485f;
+      --shadow: 0 10px 30px rgba(25, 42, 70, 0.08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #10141d; --surface: #171d28; --surface-2: #202938;
+        --text: #edf2fa; --muted: #aab5c5; --border: #344054;
+        --primary: #82a8ff; --primary-soft: #22335c; --accent: #62d4ba; --warn: #f0b86b;
+        --series-1: #82a8ff; --series-2: #62d4ba; --series-3: #f0b86b;
+        --series-4: #d69ae8; --series-5: #ff8da1;
+        --shadow: none;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: "Segoe UI", "Noto Sans KR", Arial, sans-serif; line-height: 1.68; }
+    a { color: var(--primary); }
+    code, pre { font-family: Consolas, "Cascadia Code", monospace; }
+    code { background: var(--surface-2); padding: 0.12em 0.35em; border-radius: 4px; }
+    pre { margin: 14px 0 0; padding: 16px; overflow-x: auto; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; color: var(--text); }
+    .hero { background: linear-gradient(135deg, var(--surface), var(--primary-soft)); border-bottom: 1px solid var(--border); }
+    .hero-inner { max-width: 1100px; margin: 0 auto; padding: 52px 28px 40px; }
+    .eyebrow { color: var(--primary); font-weight: 600; letter-spacing: 0.04em; }
+    h1 { margin: 8px 0 12px; max-width: 900px; font-size: clamp(2rem, 4vw, 3rem); line-height: 1.18; }
+    .lead { max-width: 840px; margin: 0; color: var(--muted); font-size: 1.06rem; }
+    .summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 26px; }
+    .summary article { padding: 16px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+    .summary span { display: block; color: var(--muted); font-size: 0.84rem; }
+    .summary strong { display: block; margin-top: 2px; font-size: 1.12rem; font-weight: 600; }
+    .page { max-width: 1100px; margin: 0 auto; padding: 32px 28px 70px; display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 34px; }
+    nav { position: sticky; top: 20px; align-self: start; padding: 15px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    nav strong { display: block; margin-bottom: 8px; }
+    nav a { display: block; padding: 5px 8px; color: var(--muted); text-decoration: none; border-left: 2px solid transparent; }
+    nav a:hover, nav a:focus { color: var(--primary); border-left-color: var(--primary); }
+    main { min-width: 0; }
+    section { scroll-margin-top: 22px; margin-bottom: 50px; }
+    h2 { margin: 0 0 16px; font-size: 1.6rem; line-height: 1.3; }
+    h3 { margin: 24px 0 10px; font-size: 1.1rem; }
+    p { margin: 10px 0; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; box-shadow: var(--shadow); }
+    .note { margin: 16px 0; padding: 14px 16px; border-left: 4px solid var(--primary); background: var(--primary-soft); }
+    .warning { border-left-color: var(--warn); }
+    table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { background: var(--surface-2); font-weight: 600; }
+    tr:last-child td { border-bottom: 0; }
+    .table-wrap { overflow-x: auto; border-radius: 10px; }
+    .table-wrap td code { overflow-wrap: anywhere; }
+    .equations { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }
+    .equation { padding: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .formula { margin: 8px 0; font-family: Cambria, Georgia, serif; font-size: 1.08rem; color: var(--primary); }
+    .diagram { display: block; width: 100%; height: auto; margin-top: 12px; }
+    .diagram text { fill: var(--text); font-family: inherit; font-size: 14px; }
+    .diagram .muted { fill: var(--muted); font-size: 12px; }
+    .diagram .codef { font-family: Consolas, monospace; font-size: 12px; fill: var(--primary); }
+    .diagram .b1 { fill: color-mix(in srgb, var(--series-1) 16%, var(--surface)); stroke: var(--series-1); stroke-width: 1.4; }
+    .diagram .b2 { fill: color-mix(in srgb, var(--series-2) 16%, var(--surface)); stroke: var(--series-2); stroke-width: 1.4; }
+    .diagram .b3 { fill: color-mix(in srgb, var(--series-3) 18%, var(--surface)); stroke: var(--series-3); stroke-width: 1.4; }
+    .diagram .b4 { fill: color-mix(in srgb, var(--series-4) 16%, var(--surface)); stroke: var(--series-4); stroke-width: 1.4; }
+    .diagram .b5 { fill: color-mix(in srgb, var(--series-5) 18%, var(--surface)); stroke: var(--series-5); stroke-width: 1.4; }
+    .diagram .plain { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.2; }
+    .diagram .arrow { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#arr); }
+    .diagram .leader { stroke: var(--muted); stroke-width: 1; fill: none; }
+    .structure-svg { display: block; width: 100%; height: auto; margin-top: 12px; }
+    .structure-svg text { fill: var(--text); font-family: inherit; }
+    .structure-svg .muted { fill: var(--muted); }
+    .structure-svg .codef { font-family: Consolas, monospace; font-size: 12.5px; fill: var(--primary); }
+    .structure-svg .body { fill: color-mix(in srgb, var(--series-1) 25%, var(--surface)); stroke: var(--series-1); }
+    .structure-svg .sd { fill: color-mix(in srgb, var(--series-5) 35%, var(--surface)); stroke: var(--series-5); }
+    .structure-svg .oxide { fill: color-mix(in srgb, var(--series-3) 35%, var(--surface)); stroke: var(--series-3); }
+    .structure-svg .gate { fill: color-mix(in srgb, var(--muted) 45%, var(--surface)); stroke: var(--muted); }
+    .structure-svg .leader { stroke: var(--muted); stroke-width: 1; fill: none; }
+    .steps { counter-reset: flow; display: grid; gap: 12px; }
+    .step { position: relative; padding: 15px 16px 15px 58px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; }
+    .step::before { counter-increment: flow; content: counter(flow); position: absolute; left: 16px; top: 15px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--primary); color: var(--surface); font-weight: 600; }
+    .step strong:first-child { display: block; }
+    .tree { line-height: 1.8; white-space: pre; overflow-x: auto; }
+    footer { max-width: 1100px; margin: 0 auto; padding: 25px 28px 45px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.86rem; }
+    @media (max-width: 820px) {
+      .page { grid-template-columns: 1fr; }
+      nav { position: static; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      nav strong { grid-column: 1 / -1; }
+      .summary, .equations { grid-template-columns: 1fr; }
+    }
+    @media print {
+      :root { color-scheme: light; --bg: #fff; --surface: #fff; --surface-2: #f4f5f7; --text: #111; --muted: #555; --border: #bbb; --shadow: none; }
+      nav { display: none; }
+      .page { display: block; }
+      section { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="eyebrow">DEVSIM 2.10.0 · 코드로 소자 모델링 및 시뮬레이션</div>
+      <h1>파이썬으로 MOSFET 시뮬레이터를 만들어 GUI 툴까지</h1>
+      <p class="lead">이 프로젝트에서 소자 특성을 모델링하고, 시뮬레이터를 <strong>직접 설계합니다</strong>. 간단한 공식 모델에서 시작해, 진짜 TCAD와 같은 물리 엔진을 붙이고, 마지막엔 브라우저에서 도는 GUI 툴로 포장합니다. 환경 설정 후에 <code>DEMO.bat</code>을 먼저 살펴보세요.</p>
+      <div class="summary">
+        <article><span>1단계</span><strong>파이썬 객체지향 간이 시뮬레이터</strong></article>
+        <article><span>2단계</span><strong>DEVSIM 진짜 TCAD 시뮬레이터</strong></article>
+        <article><span>3단계</span><strong>Streamlit GUI 툴</strong></article>
+      </div>
+    </div>
+  </header>
+
+  <div class="page">
+    <nav aria-label="문서 목차">
+      <strong>목차</strong>
+      <a href="#assignment">1. 과제 안내</a>
+      <a href="#setup">2. 환경 설정</a>
+      <a href="#step1">3. [1단계] 간이 시뮬레이터</a>
+      <a href="#step2">4. [2단계] 진짜 TCAD</a>
+      <a href="#step2code">5. [2단계] 코드가 도는 원리</a>
+      <a href="#step3">6. [3단계] GUI 툴</a>
+      <a href="#tasks">7. 과제와 제출물</a>
+    </nav>
+
+    <main>
+      <section id="assignment">
+        <h2>1. 과제 안내</h2>
+        <svg class="diagram" viewBox="0 0 760 150" role="img" aria-label="3단계 로드맵: 파이썬 간이 시뮬레이터에서 DEVSIM TCAD를 거쳐 Streamlit GUI 툴로">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/>
+            </marker>
+          </defs>
+          <rect class="b1" x="10" y="30" width="220" height="84" rx="10"/>
+          <text x="28" y="58" font-weight="600">1단계 · 간이 시뮬레이터</text>
+          <text class="muted" x="28" y="80">교과서 공식 + 클래스</text>
+          <text class="muted" x="28" y="98">numpy · pandas · plotly</text>
+          <line class="arrow" x1="232" y1="72" x2="262" y2="72"/>
+          <rect class="b2" x="266" y="30" width="220" height="84" rx="10"/>
+          <text x="284" y="58" font-weight="600">2단계 · 진짜 TCAD</text>
+          <text class="muted" x="284" y="80">DEVSIM 물리 엔진 연결</text>
+          <text class="muted" x="284" y="98">Id–Vg 완성 → Id–Vd·C–V는 과제</text>
+          <line class="arrow" x1="488" y1="72" x2="518" y2="72"/>
+          <rect class="b3" x="522" y="30" width="228" height="84" rx="10"/>
+          <text x="540" y="58" font-weight="600">3단계 · GUI 툴</text>
+          <text class="muted" x="540" y="80">Streamlit으로 포장</text>
+          <text class="muted" x="540" y="98">소자 2개 비교 → 나만의 툴</text>
+        </svg>
+        <div class="panel">
+          <ul>
+            <li><strong>목표:</strong> 각 단계의 예제를 실행·분석하고, 비어 있는 부분을 직접 구현해 <strong>나만의 EDA 툴을 완성</strong>합니다. 완성본의 모습은 <code>DEMO.bat</code>으로 언제든 볼 수 있습니다 (데모의 코드는 컴파일되어 있어 열어볼 수 없습니다 — 직접 만드세요!).</li>
+            <li><strong>AI 사용:</strong> <strong>AI에게 물어보고, AI와 함께 코딩해도 되며, 이를 권장합니다.</strong> 이 과제에서 소자를 모델링하고 소자가 변함에 따라 <strong>transistor의 특성을 분석</strong>하는 것이 주 목적입니다. AI를 활용하는 것은 좋지만, 간단한 퀴즈가 있을 수 있습니다.</li>
+            <li><strong>평가:</strong> 별도의 프로젝트 pdf를 확인해주세요.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="setup">
+        <h2>2. 환경 설정</h2>
+        <div class="steps">
+          <div class="step"><strong>압축 해제</strong>짧은 영문 경로(예: <code>C:\DEVSIM_PROJECT</code>)에 풉니다.</div>
+          <div class="step"><strong>Windows 런타임 설치</strong><a href="https://aka.ms/vs/17/release/vc_redist.x64.exe">Microsoft Visual C++ 2015–2022 Redistributable(x64)</a>을 설치(또는 Repair)합니다.</div>
+          <div class="step"><strong>Conda 설치</strong>둘 중 하나 (이미 있으면 건너뜀). 설치 유형은 <em>Just Me</em>, 위치는 기본값.<br>
+            · <a href="https://www.anaconda.com/docs/getting-started/miniconda/install/windows-gui-install">Miniconda 공식 Windows 설치 안내</a> (권장, 가벼움)<br>
+            · <a href="https://www.anaconda.com/download">Anaconda 다운로드 페이지</a> (풀 패키지)</div>
+          <div class="step"><strong>전용 환경 생성</strong>시작 메뉴의 <code>Anaconda Prompt</code>에서:<pre><code>cd /d C:\DEVSIM_PROJECT
+conda env create --prefix .\.conda --file environment.yml</code></pre><span>압축을 다른 위치에 풀었다면 <code>cd</code> 뒤를 실제 폴더 경로로 바꿔 입력합니다. 설치 중 <code>Proceed ([y]/n)?</code>이 나오면 <code>y</code>를 입력하세요.</span></div>
+          <div class="step"><strong>설치 확인 = 완성본 구경</strong><code>DEMO.bat</code> 더블클릭 → 브라우저에 데모 GUI가 뜨고 <strong>Run simulation</strong>이 돌면 설치 성공입니다. 여러분이 만들 최종 목표를 미리 만져 보세요.</div>
+        </div>
+
+        <h3>파일 구성 — ✏️ 표시가 여러분이 수정·작성할 곳입니다</h3>
+        <pre class="tree"><code>DEVSIM_PROJECT/
+├── MANUAL.html / MANUAL_EN.html   이 문서 / 영문판
+├── environment.yml                Conda 환경 정의
+├── DEMO.bat                       완성본 데모 (코드는 컴파일되어 비공개)
+├── demo/
+│
+├── step1/                         [1단계] 파이썬 간이 시뮬레이터
+│   ├── STEP1_PRACTICE.bat / STEP1_COMPARE.bat
+│   ├── simulator_practice.py      SimpleMosfet 클래스  ✏️ sweep_idvd() 메서드 추가
+│   └── compare.py                 LVT/RVT/HVT 비교 ★대표 예제  ✏️ 내가 만든 sweep_idvd로 비교
+│
+├── step2/                         [2단계] DEVSIM 진짜 TCAD
+│   ├── STEP2_RUN.bat / STEP2_COMPARE.bat
+│   ├── mosfet.py                  CLI 진입점
+│   ├── compare_tcad.py            config 설정 → 소자 비교 plot ★대표 예제
+│   ├── run_example.py             클래스를 직접 부르는 최소 예시
+│   ├── config.yaml                소자·스윕·비교 설정  ✏️ compare:로 파라미터 스터디
+│   └── mosfet_tool/               시뮬레이터 패키지
+│       ├── simulator.py           ✏️ 비워 둔 sweep_idvd() / sweep_cv() 채우기
+│       └── workflows.py           ✏️ 비워 둔 run_idvd() / run_cv() 채우기
+│
+└── step3/                         [3단계] Streamlit GUI
+    ├── STEP3_MINIAPP.bat / MY_APP.bat
+    ├── mini_app.py                Device 1/2 실시간 비교 GUI ★대표 예제
+    └── (my_app.py)                ✏️ 여러분이 새로 만들 나만의 TCAD GUI (MY_APP.bat으로 실행)</code></pre>
+      </section>
+
+      <section id="step1">
+        <h2>3. [1단계] 파이썬 객체지향으로 간이 시뮬레이터</h2>
+        <p>이 단계의 물리 공식 세 줄이 전부입니다 (교과서 square-law 모델):</p>
+        <div class="equations">
+          <article class="equation">
+            <strong>차단 · 선형 · 포화</strong>
+            <div class="formula">V<sub>g</sub> ≤ V<sub>th</sub> :&#160; I<sub>d</sub> = 0</div>
+            <div class="formula">V<sub>d</sub> &lt; V<sub>g</sub>−V<sub>th</sub> :&#160; I<sub>d</sub> = k[(V<sub>g</sub>−V<sub>th</sub>)V<sub>d</sub> − V<sub>d</sub>²/2]</div>
+            <div class="formula">V<sub>d</sub> ≥ V<sub>g</sub>−V<sub>th</sub> :&#160; I<sub>d</sub> = (k/2)(V<sub>g</sub>−V<sub>th</sub>)²</div>
+            <p>k = µ<sub>n</sub>·C<sub>ox</sub>·W/L 을 하나로 뭉친 이득 계수 — <strong>transistor width W = 1 µm 기준</strong>이라 전류 단위가 A/µm이 되고, 2단계 DEVSIM 결과와 같은 단위로 비교할 수 있습니다. 코드의 <code>current()</code> 메서드가 이 세 줄 그대로입니다.</p>
+          </article>
+          <article class="equation">
+            <strong>이 단계에서 익히는 파이썬 도구</strong>
+            <p><code>numpy</code> — 숫자 배열을 반복문 없이 한 번에 계산<br>
+               <code>pandas</code> — 결과를 표(DataFrame)로 정리, CSV 저장<br>
+               <code>plotly</code> — DataFrame이면 그래프가 한 줄<br>
+               <strong>클래스</strong> — 아래 설명</p>
+          </article>
+        </div>
+
+        <h3>클래스와 메서드란?</h3>
+        <p><strong>클래스(class)</strong>는 붕어빵 <em>틀</em>이고, 틀로 찍어낸 붕어빵 하나하나가 <strong>인스턴스</strong>입니다. 틀 안에는 각 붕어빵이 기억하는 값(<strong>속성</strong> — 예: 문턱 전압)과, 그 값으로 일하는 함수(<strong>메서드</strong> — 예: 전류 계산)가 들어 있습니다. 메서드 첫 인자 <code>self</code>는 "지금 이 붕어빵 자신"이라는 뜻입니다.</p>
+        <pre><code>class SimpleMosfet:                 # 클래스: 소자 하나를 다루는 설계도
+    def __init__(self, vth, k):     # 생성자: 인스턴스가 만들어질 때 자동 실행
+        self.vth = vth              # 속성: 이 인스턴스가 기억하는 값
+
+    def current(self, vg, vd):      # 메서드: 클래스 안의 함수
+        ...                         # self로 자기 속성(self.vth 등)에 접근
+
+mosfet = SimpleMosfet(0.6, 2e-4)    # 인스턴스 생성 (틀 → 붕어빵)
+mosfet.current(1.0, 2.0)            # 메서드 호출</code></pre>
+
+        <h3>실행 순서</h3>
+        <div class="steps">
+          <div class="step"><strong>STEP1_PRACTICE.bat</strong><code>simulator_practice.py</code>가 실행됩니다 — numpy 배열 → 클래스 → pandas 표·CSV → plotly 그래프가 한 흐름에 나옵니다. 코드를 열어 순서대로 따라 읽으세요.</div>
+          <div class="step"><strong>STEP1_COMPARE.bat</strong>★대표 예제 <code>compare.py</code> — 문턱 전압이 다른 세 소자 <strong>LVT(0.4 V) / RVT(0.6 V) / HVT(0.8 V)</strong>를 인스턴스 3개로 만들어, 곡선 3개를 한 그래프에 겹쳐 그립니다. 클래스 하나만 있으면 값만 다른 소자를 얼마든지 만들어 비교할 수 있다는 것을 확인하세요.</div>
+          <div class="step"><strong>과제: 7절 참고</strong></div>
+        </div>
+        <div class="note"><code>compare.py</code>의 핵심 패턴 — 이 패턴이 2단계와 3단계에서 그대로 반복됩니다:<br>
+        인스턴스들을 dict에 담고 → 루프로 스윕 → 표에 <code>device</code> 열 추가 → <code>pd.concat</code>으로 합쳐 → <code>px.line(color="device")</code>.</div>
+      </section>
+
+      <section id="step2">
+        <h2>4. [2단계] DEVSIM으로 진짜 TCAD 시뮬레이터</h2>
+        <p>1단계 공식 모델을 버리고, 반도체 물리 방정식을 실제로 푸는 엔진(DEVSIM)을 연결합니다. 푸는 방정식은 넷입니다 — 자세한 유도는 수업에서 다룹니다.</p>
+        <div class="equations">
+          <article class="equation">
+            <strong>Poisson 방정식</strong>
+            <div class="formula">∇·(ε∇ψ) = −q(p − n + N<sub>D</sub> − N<sub>A</sub>)</div>
+            <p>전하 분포로부터 전위 ψ와 전기장을 계산합니다. 게이트 전압이 바뀌면 채널 표면 전위와 캐리어 농도가 달라집니다.</p>
+          </article>
+          <article class="equation">
+            <strong>전자 연속방정식</strong>
+            <div class="formula">∇·J<sub>n</sub> = q(R − G)</div>
+            <p>전자 전류가 소자 내부에서 보존되도록 합니다. 전자 drift와 diffusion이 함께 포함됩니다.</p>
+          </article>
+          <article class="equation">
+            <strong>정공 연속방정식</strong>
+            <div class="formula">∇·J<sub>p</sub> = −q(R − G)</div>
+            <p>정공 전류 보존을 계산합니다. nMOS에서는 전자 전류가 주성분이지만 body와 접합 해석에 필요합니다.</p>
+          </article>
+          <article class="equation">
+            <strong>Quasi-static C–V &#160;<span style="color:var(--warn)">[과제]</span></strong>
+            <div class="formula">C<sub>gg</sub> = dQ<sub>g</sub> / dV<sub>g</sub></div>
+            <p>각 게이트 전압에서 얻은 게이트 전하를 미분합니다. 예제에는 없습니다 — 여러분이 구현할 부분입니다.</p>
+          </article>
+        </div>
+
+        <h3>config.yaml의 파라미터는 소자 어디에 있나</h3>
+        <svg class="structure-svg" viewBox="0 0 760 430" role="img" aria-label="소자 단면에 config.yaml 파라미터 이름을 표시한 그림">
+          <rect class="body" x="90" y="185" width="580" height="145" rx="2"/>
+          <rect class="sd" x="90" y="185" width="145" height="45"/>
+          <rect class="sd" x="525" y="185" width="145" height="45"/>
+          <rect class="oxide" x="235" y="165" width="290" height="20"/>
+          <rect class="gate" x="235" y="120" width="290" height="45" rx="3"/>
+          <text x="380" y="148" text-anchor="middle">Metal gate</text>
+          <text x="162" y="212" text-anchor="middle">n+ Source</text>
+          <text x="597" y="212" text-anchor="middle">n+ Drain</text>
+          <text x="380" y="265" text-anchor="middle">p-type Si body</text>
+
+          <line class="leader" x1="380" y1="175" x2="380" y2="88"/>
+          <text class="codef" x="380" y="80" text-anchor="middle">oxide_thickness_nm (산화막 두께)</text>
+
+          <line class="leader" x1="162" y1="230" x2="120" y2="262"/>
+          <text class="codef" x="24" y="278">sd_doping_cm3</text>
+          <text class="muted" x="24" y="294" font-size="11.5">n+ 소스/드레인 농도</text>
+
+          <line class="leader" x1="380" y1="270" x2="440" y2="295"/>
+          <text class="codef" x="446" y="300">body_doping_cm3</text>
+          <text class="muted" x="446" y="316" font-size="11.5">p형 기판 농도</text>
+
+          <line class="leader" x1="235" y1="230" x2="200" y2="230"/>
+          <text class="codef" x="96" y="248">junction_depth_um</text>
+          <text class="muted" x="96" y="234" font-size="11.5">n+ 접합 깊이 ↓</text>
+
+          <line class="leader" x1="676" y1="185" x2="700" y2="185"/>
+          <line class="leader" x1="676" y1="330" x2="700" y2="330"/>
+          <line class="leader" x1="700" y1="185" x2="700" y2="330"/>
+          <text class="codef" x="712" y="250" transform="rotate(90 712 250)" text-anchor="middle">silicon_thickness_um</text>
+
+          <line class="leader" x1="90" y1="360" x2="670" y2="360"/>
+          <line class="leader" x1="90" y1="352" x2="90" y2="368"/>
+          <line class="leader" x1="235" y1="352" x2="235" y2="368"/>
+          <line class="leader" x1="525" y1="352" x2="525" y2="368"/>
+          <line class="leader" x1="670" y1="352" x2="670" y2="368"/>
+          <text class="codef" x="162" y="386" text-anchor="middle">source_length_um</text>
+          <text class="codef" x="380" y="386" text-anchor="middle">gate_length_um</text>
+          <text class="codef" x="597" y="386" text-anchor="middle">drain_length_um</text>
+          <text class="muted" x="380" y="412" text-anchor="middle">x: 소스→드레인 방향, y: 표면(0)→body 깊이 방향(+). temperature_k는 전체 온도.</text>
+        </svg>
+        <p><code>config.yaml</code>에서 이 값들을 바꾸면 소자가 바뀝니다.</p>
+
+        <h3>실행 순서</h3>
+        <div class="steps">
+          <div class="step"><strong>STEP2_RUN.bat</strong><code>mosfet.py</code>가 Id–Vg를 계산해 <code>idvg.csv</code>를 만듭니다 (수십 초). 1단계와 달리 곡선에 문턱 이하 전류(fA~nA)가 살아 있는 것을 확인하세요 — 공식 모델에는 없던 물리입니다.</div>
+          <div class="step"><strong>STEP2_COMPARE.bat</strong> ★대표 예제 <code>compare_tcad.py</code> — <code>config.yaml</code>의 <code>compare:</code> 항목에 적힌 소자들(기본: 산화막 5/10/20 nm)을 차례로 시뮬레이션해 한 그래프에 겹칩니다. <strong>설정만 바꾸면 그래프가 바뀝니다</strong>. 코드 모양이 1단계 compare.py와 같다는 점에 주목하세요.</div>
+          <div class="step"><strong>과제: 7절 참고</strong></div>
+        </div>
+      </section>
+
+      <section id="step2code">
+        <h2>5. [2단계] 코드가 도는 원리</h2>
+        <p>위에서 아래로 <strong>호출</strong>이 내려가고, 아래에서 위로 <strong>결과</strong>가 올라옵니다.</p>
+        <svg class="diagram" viewBox="0 0 760 400" role="img" aria-label="코드 계층 구조">
+          <rect class="b1" x="40" y="18" width="440" height="66" rx="10"/>
+          <text x="60" y="45" font-weight="600">진입점 — mosfet.py · compare_tcad.py · run_example.py</text>
+          <text class="muted" x="60" y="68">설정 읽기 · 해석 호출 · 그래프/CSV 출력 (계산은 안 함)</text>
+          <line class="arrow" x1="260" y1="84" x2="260" y2="112"/>
+          <text class="muted" x="276" y="103">import · 함수/메서드 호출</text>
+          <rect class="b2" x="40" y="114" width="440" height="66" rx="10"/>
+          <text x="60" y="141" font-weight="600">step2/mosfet_tool — 시뮬레이터 패키지</text>
+          <text class="muted" x="60" y="164">config.py (Device) · simulator.py (MosfetSimulator) · workflows.py</text>
+          <line class="arrow" x1="260" y1="180" x2="260" y2="208"/>
+          <text class="muted" x="276" y="199">헬퍼 함수 호출</text>
+          <rect class="b3" x="40" y="210" width="440" height="66" rx="10"/>
+          <text x="60" y="237" font-weight="600">devsim.python_packages — 방정식 준비</text>
+          <text class="muted" x="60" y="260">simple_physics 등 → 물리 수식을 글자(문자열)로 적어 등록</text>
+          <line class="arrow" x1="260" y1="276" x2="260" y2="304"/>
+          <text class="muted" x="276" y="295">"이 수식을 풀어라" 요청</text>
+          <rect class="b4" x="40" y="306" width="440" height="66" rx="10"/>
+          <text x="60" y="333" font-weight="600">DEVSIM 엔진 (C++)</text>
+          <text class="muted" x="60" y="356">수식 읽기 · 미분 자동 생성 · 큰 연립방정식으로 조립 · 반복해서 풀기</text>
+          <text class="muted" x="510" y="120">결과가 위로:</text>
+          <text class="muted" x="510" y="140">· 수렴된 해 (ψ, n, p)</text>
+          <text class="muted" x="510" y="160">· 접점 전류 Id</text>
+          <text class="muted" x="510" y="180">· 게이트 전하 Qg</text>
+          <text class="muted" x="510" y="216">우리가 쓰고 고치는 코드는</text>
+          <text class="muted" x="510" y="236">위 두 층뿐이다.</text>
+        </svg>
+
+        <h3>한 번의 해석이 흘러가는 순서</h3>
+        <svg class="diagram" viewBox="0 0 760 470" role="img" aria-label="시뮬레이션 흐름">
+          <rect class="b1" x="200" y="14" width="360" height="72" rx="10"/>
+          <text x="220" y="40" font-weight="600">build()</text>
+          <text class="muted" x="220" y="61">① 메시  ② 영역·접점  ③ erfc 도핑</text>
+          <text class="muted" x="220" y="79">④ Poisson 방정식 등록 (아직 풀지 않음)</text>
+          <line class="arrow" x1="380" y1="86" x2="380" y2="112"/>
+          <rect class="b2" x="200" y="114" width="360" height="58" rx="10"/>
+          <text x="220" y="140" font-weight="600">solve_equilibrium()</text>
+          <text class="muted" x="220" y="161">전압을 걸기 전 상태를 먼저 계산 → 모든 계산의 출발점</text>
+          <line class="arrow" x1="290" y1="172" x2="200" y2="212"/>
+          <line class="arrow" x1="470" y1="172" x2="560" y2="212"/>
+          <text class="muted" x="96" y="200">I–V 경로</text>
+          <text class="muted" x="600" y="200">C–V 경로 [과제]</text>
+          <rect class="b3" x="40" y="214" width="330" height="58" rx="10"/>
+          <text x="58" y="240" font-weight="600">enable_transport()</text>
+          <text class="muted" x="58" y="261">전류가 흐를 수 있게 전자·정공 계산을 켬</text>
+          <line class="arrow" x1="205" y1="272" x2="205" y2="298"/>
+          <rect class="b3" x="40" y="300" width="330" height="58" rx="10"/>
+          <text x="58" y="326" font-weight="600">sweep_idvg() (완성) / sweep_idvd() [과제]</text>
+          <text class="muted" x="58" y="347">전압 스윕 → drain_current() → (V, Id) 표</text>
+          <rect class="b5" x="420" y="214" width="300" height="86" rx="10"/>
+          <text x="438" y="240" font-weight="600">sweep_cv() [과제]</text>
+          <text class="muted" x="438" y="261">전류 계산은 켜지 않고 전하만 본다</text>
+          <text class="muted" x="438" y="279">전압마다 gate_charge() → 기울기 dQ/dV</text>
+          <text class="muted" x="438" y="297">→ (Vg, Cgg) 표</text>
+          <line class="arrow" x1="205" y1="358" x2="205" y2="392"/>
+          <line class="arrow" x1="570" y1="300" x2="570" y2="392"/>
+          <rect class="plain" x="40" y="394" width="680" height="60" rx="10"/>
+          <text x="58" y="420" font-weight="600">스윕의 한 스텝 (모든 스윕 공통)</text>
+          <text class="muted" x="58" y="441">set_bias(): 전압을 계단처럼 조금씩 올림 → 계단마다 devsim.solve() → 전류/전하 읽기</text>
+        </svg>
+        <div class="note">왜 갈라질까? 전류(Id)는 전자가 실제로 <em>흘러야</em> 나오는 값이라 전자·정공 계산이 필요합니다. 반면 커패시턴스(C–V)는 각 전압에서 게이트에 <em>쌓인 전하량</em>만 알면 되므로 더 가볍게 구할 수 있습니다. — C–V 과제를 구현할 때 <code>enable_transport()</code>를 부르면 안 되는 이유입니다.</div>
+
+        <h3>물리 수식은 어떻게 컴퓨터로 들어가나</h3>
+        <p>신기하게도 <strong>방정식은 우리 코드 어디에도 없습니다</strong>. <code>simulator.py</code>가 <code>CreateSiliconDriftDiffusion(...)</code> 한 줄을 부르면 아래 4단계가 일어납니다.</p>
+        <svg class="diagram" viewBox="0 0 760 420" role="img" aria-label="수식이 컴퓨터로 들어가는 파이프라인">
+          <rect class="b1" x="40" y="14" width="680" height="66" rx="10"/>
+          <text x="60" y="41" font-weight="600">① 교과서의 방정식 (4절의 카드들)</text>
+          <text class="muted" x="60" y="64">∇·(ε∇ψ) = −q(p − n + N_D − N_A) &#160;·&#160; ∇·J_n = qR &#160;·&#160; ∇·J_p = −qR</text>
+          <line class="arrow" x1="380" y1="80" x2="380" y2="106"/>
+          <text class="muted" x="396" y="98">사람이 수식을 글자로 옮겨 적음</text>
+          <rect class="b3" x="40" y="108" width="680" height="84" rx="10"/>
+          <text x="60" y="135" font-weight="600">② 글자로 쓴 수식 — devsim\python_packages\simple_physics.py</text>
+          <text class="muted" x="60" y="158" font-family="Consolas, monospace">"-ElectronCharge*kahan3(Holes, -Electrons, NetDoping)"   ← Poisson 우변</text>
+          <text class="muted" x="60" y="178" font-family="Consolas, monospace">"Permittivity * ElectricField"                            ← Poisson 좌변</text>
+          <line class="arrow" x1="380" y1="192" x2="380" y2="218"/>
+          <text class="muted" x="396" y="210">equation()으로 DEVSIM에 전달</text>
+          <rect class="b4" x="40" y="220" width="680" height="66" rx="10"/>
+          <text x="60" y="247" font-weight="600">③ DEVSIM이 수식을 읽고 미분까지 스스로 한다</text>
+          <text class="muted" x="60" y="270">글자 수식을 해석하고, 풀이에 필요한 미분 공식을 자동으로 만든다 (사람이 미분하지 않음)</text>
+          <line class="arrow" x1="380" y1="286" x2="380" y2="312"/>
+          <rect class="b2" x="40" y="314" width="680" height="66" rx="10"/>
+          <text x="60" y="341" font-weight="600">④ 숫자로 풀기</text>
+          <text class="muted" x="60" y="364">격자 점마다 방정식을 세워 큰 연립방정식을 만들고, 추측→오차 확인→수정을 반복 (콘솔의 RelError)</text>
+          <text class="muted" x="60" y="408">전류 수식만은 그냥 계산하면 숫자가 튀기 때문에, 안정화된 특별 공식(Scharfetter–Gummel)을 쓴다 → simple_dd.py</text>
+        </svg>
+        <div class="note">위 문자열 수식이 실제로 적혀 있는 파일: <code>.conda\Lib\site-packages\devsim\python_packages\simple_physics.py</code>. 궁금하면 열어 봐도 됩니다 (과제 아님).</div>
+
+        <h3>자주 나오는 용어 (이것만 알면 읽힌다)</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>용어</th><th>뜻</th></tr></thead>
+            <tbody>
+              <tr><td>TCAD</td><td>Technology Computer-Aided Design의 약자. 반도체 공정·소자를 물리 방정식으로 시뮬레이션하는 분야를 통칭한다.</td></tr>
+              <tr><td>메시(mesh)</td><td>소자를 계산하기 위해 잘게 나눈 격자. 격자 점마다 방정식을 세운다.</td></tr>
+              <tr><td>접점(contact)</td><td>소자에 전압을 걸어 주는 금속 단자 (gate, source, drain, body 4개).</td></tr>
+              <tr><td>평형 상태</td><td>아무 전압도 걸지 않은 상태. 모든 계산은 여기서 출발한다.</td></tr>
+              <tr><td>스윕(sweep)</td><td>전압을 조금씩 바꿔 가며 같은 계산을 반복하는 것. 그 결과가 곡선이 된다.</td></tr>
+              <tr><td>Newton 반복</td><td>답을 추측 → 오차 확인 → 수정을 반복해 정답에 다가가는 방법. 콘솔의 RelError가 그 오차.</td></tr>
+              <tr><td>solve</td><td>"현재 조건에서 방정식을 풀어라"라는 DEVSIM 명령. 전압을 바꿀 때마다 다시 부른다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="step3">
+        <h2>6. [3단계] Streamlit으로 GUI 툴 만들기</h2>
+        <p>시뮬레이터가 있어도 코드로만 돌리면 툴이 아닙니다. 마지막 단계에서는 <strong>Streamlit</strong>으로 브라우저에서 도는 GUI로 포장합니다.</p>
+
+        <h3>Streamlit이 대신 해 주는 것</h3>
+        <p>Streamlit은 <strong>파이썬 스크립트를 웹페이지로 바꿔 주는 라이브러리</strong>입니다. 웹 지식이 없어도 GUI가 만들어지는 이유입니다.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>설명</th></tr></thead>
+            <tbody>
+              <tr><td><strong>실행</strong></td><td>bat을 더블클릭하면 Streamlit이 내 PC에 작은 웹서버를 켜고, 브라우저에 화면을 띄웁니다. 검은 콘솔 창이 그 서버입니다 — 닫으면 GUI도 꺼집니다.</td></tr>
+              <tr><td><strong>화면 부품</strong></td><td>파이썬 한 줄이 화면 요소 하나입니다: <code>st.slider()</code> = 슬라이더, <code>st.button()</code> = 버튼, <code>st.plotly_chart()</code> = 그래프. HTML/CSS를 쓸 필요가 없습니다.</td></tr>
+              <tr><td><strong>배치</strong></td><td>위치를 정해 줄 필요도 없습니다 — <strong>코드에서 부른 순서대로 위에서 아래로 자동 배치</strong>됩니다. 좌우로 나누고 싶을 때만 <code>st.columns()</code>를 씁니다 (mini_app의 Device 1/2가 그 예).</td></tr>
+              <tr><td><strong>갱신</strong></td><td>슬라이더나 버튼을 조작하면 <strong>스크립트 전체가 처음부터 다시 실행</strong>되면서 화면이 새로 그려집니다. mini_app을 조작하면서 코드와 화면을 같이 보면 이해됩니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>실행 순서</h3>
+        <div class="steps">
+          <div class="step"><strong>STEP3_MINIAPP.bat</strong>★대표 예제 <code>mini_app.py</code> — <strong>Device 1 / Device 2</strong>를 양쪽에 놓고 각각 Vth·k를 설정한 뒤 <strong>Run simulation</strong>을 누르면 두 곡선이 한 그래프에서 비교됩니다.</div>
+          <div class="step"><strong>DEMO.bat과 비교</strong>데모는 같은 구조에 2단계 TCAD 엔진을 연결하고 Id–Vd·C–V까지 얹은 완성본입니다. mini_app과 데모 사이의 거리가 곧 여러분의 최종 과제입니다.</div>
+          <div class="step"><strong>최종 과제</strong>아래 "my_app.py 만드는 법"을 따라 나만의 TCAD GUI를 만듭니다. 제출 요건은 7절 참고.</div>
+        </div>
+
+        <h3>my_app.py 만드는 법</h3>
+        <p>목표: mini_app의 화면 구조는 그대로 두고, <strong>계산 엔진을 1단계 간이 모델에서 2단계 TCAD로 교체</strong>하는 것입니다. 순서대로 하면 됩니다.</p>
+        <div class="steps">
+          <div class="step"><strong>복사해서 시작</strong><code>step3</code> 폴더에서 <code>mini_app.py</code>를 복사해 <code>my_app.py</code>로 이름을 바꿉니다. <code>MY_APP.bat</code>을 더블클릭해 mini_app과 똑같이 뜨는지 확인합니다 (이 bat은 my_app.py 전용 실행기입니다).</div>
+          <div class="step"><strong>엔진 교체</strong>import를 1단계 <code>SimpleMosfet</code>에서 2단계 엔진으로 바꿉니다. mini_app.py 상단에 <code>step1</code>을 import 경로에 추가하는 코드가 이미 있으니, 같은 방법으로 <code>step2</code>를 추가하고 <code>mosfet_tool</code>의 <code>Device</code>와 <code>run_idvg</code>를 가져오면 됩니다.</div>
+          <div class="step"><strong>입력을 소자 파라미터로</strong>Vth·k 슬라이더를 <code>Device</code>의 파라미터(예: <code>gate_length_um</code>, <code>oxide_thickness_nm</code>, 도핑)로 바꿉니다. 4절의 파라미터 그림이 목록입니다.</div>
+          <div class="step"><strong>확장</strong>2단계에서 구현한 <code>run_idvd</code>·<code>run_cv</code>를 해석 선택 메뉴(<code>st.selectbox</code>)로 연결하고, 과제 ②(DEMO에 없는 소자 설정)를 추가합니다. 각 단계에서 막히면 AI에게 물어보세요 — 완성 형태는 언제든 DEMO.bat으로 확인할 수 있습니다.</div>
+        </div>
+      </section>
+
+      <section id="tasks">
+        <h2>7. 과제와 제출물</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>단계</th><th>실습 (따라하기)</th><th>과제 (직접 만들기) — 수정할 파일</th><th>제출물</th></tr></thead>
+            <tbody>
+              <tr><td><strong>1</strong></td><td>STEP1 예제 2개 실행·분석</td><td><code>sweep_idvd()</code> 메서드를 구현하고, <strong>그 메서드로</strong> Vth(또는 k)가 다른 소자 2~3개의 Id–Vd를 겹쳐 그려 차이를 해석 — <code>simulator_practice.py</code>·<code>compare.py</code></td><td>코드 캡처 + 그래프 + 짧은 해석</td></tr>
+              <tr><td><strong>2</strong></td><td>STEP2 예제 2개 실행·분석</td><td>① <code>sweep_idvd</code>/<code>run_idvd</code> 구현<br>② <code>sweep_cv</code>/<code>run_cv</code> 구현<br>&#160;&#160;&#160;①②는 <code>step2/mosfet_tool/</code>의 <code>simulator.py</code>·<code>workflows.py</code>에 비워 둔 함수 채우기<br>③ 파라미터 스터디 1건 — <code>config.yaml</code>의 <code>compare:</code><br>④ 간이 모델 vs DEVSIM 비교 — 두 Id–Vg를 같은 조건(Vd = 0.05 V)으로 겹쳐 그리고, 차이를 코드·물리 수식에 근거해 설명</td><td>코드 캡처 + 그래프 + 분석</td></tr>
+              <tr><td><strong>3</strong></td><td>mini_app 실행, DEMO와 비교</td><td>① 나만의 TCAD GUI — <code>my_app.py</code> 신규 작성 (<code>mini_app.py</code>를 복사해서 시작 권장, 2단계 엔진과 구현한 해석 모두 연결)<br>② DEMO에 없는 <strong>소자 관련 설정을 하나 이상 골라</strong>(아래 예시 목록 참고) 내 GUI에 추가하고, 그 설정이 <strong>왜 필요한지</strong>와 값에 따라 특성이 어떻게 변하는지 설명</td><td>코드 캡처 + GUI 스크린샷</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>과제 ② 예시 목록: 소자에 추가할 수 있는 설정</h3>
+        <p>아래에서 골라도 되고, 목록에 없는 것을 스스로 찾아도 됩니다. 그 항목이 무엇인지, 왜 필요한지, 값에 따라 특성이 어떻게 변하는지 조사하고 해석하세요.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>레벨</th><th>후보</th></tr></thead>
+            <tbody>
+              <tr><td rowspan="4"><strong>1 · 숫자만 바꿈</strong><br><code>set_parameter</code> 수준</td><td>전자/정공 mobility 값 (µn, µp)</td></tr>
+              <tr><td>게이트 유전체 유전율 (high-k)</td></tr>
+              <tr><td>SRH 재결합 수명 (taun, taup)</td></tr>
+              <tr><td>Gate work function (금속 종류)</td></tr>
+              <tr><td rowspan="4"><strong>2 · 기존 수식에 항 추가</strong><br>주로 도핑 수식</td><td>LDD (lightly doped drain)</td></tr>
+              <tr><td>Halo / pocket 도핑</td></tr>
+              <tr><td>Si/SiO₂ 계면 고정 전하</td></tr>
+              <tr><td>pMOS (극성 반전)</td></tr>
+              <tr><td rowspan="3"><strong>3 · 모델 교체·구조 확장</strong><br>동봉 헬퍼·예제 활용</td><td>도핑 의존 mobility (Klaassen 모델)</td></tr>
+              <tr><td>Fermi–Dirac 통계</td></tr>
+              <tr><td>SOI 구조 (매몰 산화막)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">참고 자료: <code>.conda\Lib\site-packages\devsim\python_packages\</code><br>공식 예제: <code>.conda\devsim_data\examples\</code></div>
+
+        <div class="note"><strong>제출 형식:</strong> 코드 파일을 내지 말고, 작성한 코드를 캡처해서 그래프·해석과 함께 <strong>PDF 한 부</strong>로 묶어 제출합니다. 코드 캡처에는 주석과 간단한 설명을 함께 적어 주세요.</div>
+        <div class="note"><strong>다시 강조:</strong> AI와 함께 공부하고 코딩하는 것을 권장합니다.</div>
+      </section>
+    </main>
+  </div>
+
+  <footer>생성일: 2026-09-01 · 환경: Python 3.11 / DEVSIM 2.10.0 / Streamlit · 완성본은 DEMO.bat에서 언제든 확인할 수 있습니다.</footer>
+</body>
+</html>

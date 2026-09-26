@@ -1,0 +1,7 @@
+prefix=/home/moja/Documents/YonseiProjects/DigitalMicroelectronics/DEVSIM_PROJECT/..conda
+includedir=${prefix}/include
+
+Name: ResourceProto
+Description: Resource extension headers
+Version: 1.2.0
+Cflags: -I${includedir}

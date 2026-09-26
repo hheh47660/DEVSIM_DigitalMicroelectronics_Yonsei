@@ -1,0 +1,7 @@
+prefix=/home/moja/Documents/YonseiProjects/DigitalMicroelectronics/DEVSIM_PROJECT/..c^Cda
+includedir=${prefix}/include
+
+Name: ScrnSaverProto
+Description: ScrnSaver extension headers
+Version: 1.2.3
+Cflags: -I${includedir}
