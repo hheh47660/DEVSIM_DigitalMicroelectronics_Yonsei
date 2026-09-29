@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import devsim
 import numpy as np
@@ -32,6 +33,8 @@ from .config import Device
 UM = 1.0e-4  # 1 µm in cm (DEVSIM 내부 단위는 cm)
 NM = 1.0e-7  # 1 nm in cm
 
+# Project 1 : Boltzmann Constant
+KB_EV = 8.617333262145e-5
 
 def voltage_points(start: float, stop: float, step: float) -> np.ndarray:
     """start에서 stop까지 step 간격의 전압 배열을 만든다 (practice.py의 np.arange 참고)."""
@@ -64,8 +67,12 @@ class MosfetSimulator:
         self.x_right = self.x_gate_right + device.drain_length_um * UM
         self.y_oxide_top = -device.oxide_thickness_nm * NM
         self.y_junction = device.junction_depth_um * UM
-        self.y_bottom = device.silicon_thickness_um * UM
+        self.y_bottom = device.silicon_thickness_um * UM        
         self.bias = {"gate": 0.0, "source": 0.0, "drain": 0.0, "body": 0.0}
+
+        # Project 1 : Add gate_metal
+        self.y_gate_top = self.y_oxide_top - 10.0 * NM
+        self.silicon_gate_metal_name = device.silicon_gate_metal_name
 
     # ------------------------------------------------------------------
     # 1) 구조 만들기
@@ -75,6 +82,11 @@ class MosfetSimulator:
         self._clear_session()
         self._build_mesh()
         self._build_doping()
+
+        # Project 1 : Save device design
+        design_file = Path(__file__).resolve().parents[2] / "project1" / "part1_2026848368.devsim"
+        devsim.write_devices(file=str(design_file), device=self.name, type="devsim")
+
         self._build_physics()
 
     def _clear_session(self) -> None:
@@ -95,6 +107,7 @@ class MosfetSimulator:
             devsim.add_2d_mesh_line(mesh=self.mesh, dir="x", pos=pos, ps=self.DX_CHANNEL)
         for pos, spacing in (
             (y_min, self.DY_BULK),
+            (self.y_gate_top, self.DY_OXIDE), # Project 1: Add gate_material
             (self.y_oxide_top, self.DY_OXIDE),
             (0.0, min(self.DY_OXIDE, self.DY_JUNCTION)),
             (self.y_junction, self.DY_JUNCTION),
@@ -109,6 +122,11 @@ class MosfetSimulator:
         devsim.add_2d_region(mesh=self.mesh, material="Oxide", region="oxide",
                              xl=self.x_gate_left, xh=self.x_gate_right,
                              yl=0.0, yh=self.y_oxide_top)
+
+        # Project 1 : Add gate_material
+        devsim.add_2d_region(mesh=self.mesh, material=self.silicon_gate_metal_name, 
+                             region="gate_metal", xl=self.x_gate_left, xh=self.x_gate_right,
+                             yl=self.y_oxide_top, yh=self.y_gate_top)
 
         devsim.add_2d_contact(mesh=self.mesh, name="gate", region="oxide", material="metal",
                               xl=self.x_gate_left, xh=self.x_gate_right,
@@ -150,6 +168,12 @@ class MosfetSimulator:
         SetSiliconParameters(self.name, "bulk", self.dev.temperature_k)
         devsim.set_parameter(device=self.name, region="bulk", name="mu_n", value=self.MU_N)
         devsim.set_parameter(device=self.name, region="bulk", name="mu_p", value=self.MU_P)
+
+        # Project 1: Add concentretion temperature dependent
+        ni_T = self._intrinsic_concentration(self.dev.temperature_k)
+        for param_name in ("n_i", "n1", "p1"):
+            devsim.set_parameter(device=self.name, region="bulk", name=param_name, value=ni_T)
+
         CreateSiliconPotentialOnly(self.name, "bulk")
         SetOxideParameters(self.name, "oxide", self.dev.temperature_k)
         CreateOxidePotentialOnly(self.name, "oxide", "log_damp")
@@ -265,3 +289,14 @@ class MosfetSimulator:
 
         capacitances = np.gradient(charges, vgs) * UM
         return pd.DataFrame({"Vg_V": vgs, "Cgg_F_per_um": capacitances})
+
+
+    # Project 1 : Calculate concentration based on temperature
+    def _intrinsic_concentration(self, T: float) -> float:
+        Eg0, alpha, beta = 1.166, 4.73e-4, 636.0  # Costanti di Varshni per il Si
+        Eg_T = Eg0 - alpha * T**2 / (T + beta)     # Bandgap Eg(T) a temperatura T
+        Eg_300 = Eg0 - alpha * 300.0**2 / (300.0 + beta)
+        ni_300 = 1.0e10
+        return ni_300 * (T / 300.0) ** 1.5 * math.exp(
+                -Eg_T / (2 * KB_EV * T) + Eg_300 / (2 * KB_EV * 300.0)
+            )

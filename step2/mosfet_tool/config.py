@@ -22,6 +22,7 @@ class Device:
     body_doping_cm3: float = 1.0e16
     sd_doping_cm3: float = 1.0e19
     temperature_k: float = 300.0
+    silicon_gate_metal_name: str = "TaN" # Project 1 : Added gate's material
 
 
 def load_config(path: str | Path) -> tuple[Device, dict]:
