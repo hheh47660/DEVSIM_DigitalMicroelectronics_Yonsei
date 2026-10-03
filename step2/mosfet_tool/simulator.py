@@ -163,6 +163,12 @@ class MosfetSimulator:
         )
 
     def _build_physics(self) -> None:
+        # Project 1 : Add 128-bit extended precision for convergece
+        devsim.set_parameter(name="extended_precision", value=True)
+        devsim.set_parameter(name="extended_solver", value=True)
+        devsim.set_parameter(name="extended_model", value=True)
+
+
         for region in ("bulk", "oxide"):
             CreateSolution(self.name, region, "Potential")
         SetSiliconParameters(self.name, "bulk", self.dev.temperature_k)

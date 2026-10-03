@@ -1,0 +1,34 @@
+Vth 5.6271e-01 V 0.45 ± 0.05 V
+Ion 1.3962e-04 A/um >= 450 uA/um
+Ioff 2.1307e-15 A/um <= 1 pA/um
+SS 6.8957e+01 mV/dec <= 75 mV/dec
+Ioff_125C 3.3750e-11 A/um <= 100 pA/um
+DIBL 1.3456e+01 mV/V <= 30 mV/V
+Body_effect 4.1906e-02 V <= 0.08 V
+Eox 2.0000e+00 MV/cm <= 5 MV/cm
+
+----------------------------
+Devo diminuire V_th
+Devo aumentare I_on
+
+Per entrambi posso provare a ridurre t_ox : ho diminuito da 10 a 5 la t_ox
+Cambiare metal con work function minore: sostituito con Ti
+La corrente é ancora troppo bassa
+
+Ho aumentato il doping_sd da 10^19 a 10^20; ora la corrente é a 299uA
+
+Provo a ridurre L_g da a 1um a 0.8um; ora é a 380, provo a portare L_g a 0.6; ora é 550, per cui provo a tornare a 0.65 ed ottengo 495uA
+
+Faccio un nuovo tentativo con tutti i parametri
+
+----------------------------
+
+Vth 0.4621 V 0.45 ± 0.05 V
+Ion 495.40 uA/um >= 450 uA/um
+Ioff 0.0319 pA/um <= 1 pA/um
+SS 66.21 mV/dec <= 75 mV/dec
+Ioff_125C 85.54 pA/um <= 100 pA/um
+DIBL 17.26 mV/V <= 30 mV/V
+Body_effect 0.0208 V <= 0.08 V
+Eox 4.00 MV/cm <= 5 MV/cm
+
