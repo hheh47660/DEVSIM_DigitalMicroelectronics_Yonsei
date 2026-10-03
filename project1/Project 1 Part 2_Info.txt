@@ -16,12 +16,13 @@ device = Device(
         cap_dielectric_thickness_nm=5.0,
         cap_dielectric_material="ZrO2"
     )
-Case with stored value 0: The tension went down by (|V_BL - 1V|): 107.14 mV with V_BL final 0.8929 V
-Case with stored value 1: 
+Case with stored value 0: The tension went down by (|V_BL - 1V|): 107.14 mV with V_BL final 0.8929 V -> Positivo
+Case with stored value 1: The tension went up by (|V_BL - 1V|): 107.14 mV wth V_BL final 1.1071 V -> Positivo 
 
 
 
- To get retention time I need C_store:
+
+To get retention time I need C_store:
  def plate_charge(self) -> float:
         """저장용량 판 접점의 전하 [C/cm]."""
         ql = devsim.get_contact_charge(device=self.name, contact="plate_l",

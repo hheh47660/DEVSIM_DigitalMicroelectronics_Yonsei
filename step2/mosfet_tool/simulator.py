@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""DEVSIM 2-D nMOSFET 라이트 시뮬레이터 (수업용).
+"""DEVSIM 2-D nMOSFET lightweight simulator (for coursework).
 
-원본 프로젝트의 simulator.py에서 I-V / C-V 계산에 꼭 필요한 기능만 남겼다.
-물리 방정식 자체는 이 파일에 없다 — devsim.python_packages의 헬퍼가
-문자열 수식으로 조립한다 (MANUAL.html 6절 참고).
+Kept only what's needed for I-V / C-V calculations from the original
+project's simulator.py. The physics equations themselves aren't in this
+file -- devsim.python_packages helpers assemble them as string expressions
+(see MANUAL.html section 6).
 """
 
 from __future__ import annotations
@@ -26,15 +27,29 @@ from devsim.python_packages.simple_physics import (
     GetContactBiasName,
     SetOxideParameters,
     SetSiliconParameters,
+    # needed by _create_gate_contact_with_workfunction()
+    GetContactNodeModelName,
+    CreateContactNodeModel,
+    CreateContactNodeModelDerivative,
+    InEdgeModelList,
+    CreateEdgeModel,
+    CreateEdgeModelDerivatives,
 )
 
 from .config import Device
 
-UM = 1.0e-4  # 1 µm in cm (DEVSIM 내부 단위는 cm)
+UM = 1.0e-4  # 1 um in cm (DEVSIM's internal unit is cm)
 NM = 1.0e-7  # 1 nm in cm
 
 # Project 1 : Boltzmann Constant
 KB_EV = 8.617333262145e-5
+
+# Project 1: gate metal work function table (eV), from the assignment
+PHI_M_TABLE = {
+    "n+ poly-Si": 4.05, "Al": 4.10, "Ta": 4.25, "Ti": 4.33,
+    "TaN": 4.45, "W": 4.60, "TiN": 4.65, "Mo": 4.70,
+    "Ni": 5.10, "p+ poly-Si": 5.15, "Pt": 5.30,
+}
 
 # Project 2: relative permittivity of each allowed capacitor dielectric
 # (from the assignment's material table)
@@ -46,7 +61,7 @@ DIELECTRIC_EPS_R_TABLE = {
 }
 
 def voltage_points(start: float, stop: float, step: float) -> np.ndarray:
-    """start에서 stop까지 step 간격의 전압 배열을 만든다 (practice.py의 np.arange 참고)."""
+    """Build a voltage array from start to stop in steps of step (see np.arange in practice.py)."""
     count = round(abs(stop - start) / step)
     signed_step = step if stop >= start else -step
     return np.round(start + signed_step * np.arange(count + 1), 9)
@@ -55,8 +70,8 @@ def voltage_points(start: float, stop: float, step: float) -> np.ndarray:
 class MosfetSimulator:
     """2-D planar nMOS drift-diffusion solver.
 
-    호출 순서: build() → solve_equilibrium() → [enable_transport()] → sweep_*()
-    C-V만 계산할 때는 enable_transport()를 건너뛴다.
+    Call order: build() -> solve_equilibrium() -> [enable_transport()] -> sweep_*()
+    For C-V only, skip enable_transport().
     """
 
     MU_N = 400.0  # electron mobility [cm^2/V·s]
@@ -83,7 +98,8 @@ class MosfetSimulator:
         self.y_oxide_top = -device.oxide_thickness_nm * NM
         self.y_junction = device.junction_depth_um * UM
         self.y_bottom = device.silicon_thickness_um * UM        
-        self.bias = {"gate": 0.0, "source": 0.0, "drain": 0.0, "body": 0.0}
+        self.bias = {"gate": 0.0, "source": 0.0, "drain": 0.0, "body": 0.0,
+            "storage_l": 0.0, "storage_r": 0.0, "plate_l": 0.0, "plate_r": 0.0}
 
         # Project 1 : Add gate_metal
         self.y_gate_top = self.y_oxide_top - 10.0 * NM
@@ -104,10 +120,10 @@ class MosfetSimulator:
         self.cap_dielectric_material = device.cap_dielectric_material
 
     # ------------------------------------------------------------------
-    # 1) 구조 만들기
+    # 1) Build the structure
     # ------------------------------------------------------------------
     def build(self) -> None:
-        """메시 → 영역/접점 → 도핑 → Poisson 방정식 등록까지 수행한다."""
+        """Mesh -> regions/contacts -> doping -> register the Poisson equations."""
         self._clear_session()
         self._build_mesh()
         self._build_doping()
@@ -119,8 +135,8 @@ class MosfetSimulator:
         self._build_physics()
 
     def _clear_session(self) -> None:
-        # DEVSIM의 solve는 프로세스 안의 모든 device를 함께 진행시키므로,
-        # 새 시뮬레이션을 시작하기 전에 이전 device를 지운다.
+        # DEVSIM's solve advances every device in the process together, so
+        # clear out any previous device before starting a new simulation.
         for device in tuple(devsim.get_device_list()):
             devsim.delete_device(device=device)
         for mesh in tuple(devsim.get_mesh_list()):
@@ -228,7 +244,7 @@ class MosfetSimulator:
         devsim.create_device(mesh=self.mesh, device=self.name)
 
     def _build_doping(self) -> None:
-        # n+ 소스/드레인 도핑을 erfc()로 부드럽게 감소시킨다 (수업에서 다룸).
+        # Smoothly roll off the n+ source/drain doping with erfc() (covered in class).
         nd, na = self.dev.sd_doping_cm3, self.dev.body_doping_cm3
         decay_x = 0.5 * self.DX_CHANNEL
         decay_y = 0.5 * self.DY_JUNCTION
@@ -267,7 +283,8 @@ class MosfetSimulator:
         CreateSiliconPotentialOnly(self.name, "bulk")
         SetOxideParameters(self.name, "oxide", self.dev.temperature_k)
         CreateOxidePotentialOnly(self.name, "oxide", "log_damp")
-        CreateOxideContact(self.name, "oxide", "gate")
+        # Project 1: gate work function fix (replaces plain CreateOxideContact)
+        self._create_gate_contact_with_workfunction()
         devsim.set_parameter(device=self.name, name=GetContactBiasName("gate"), value=0.0)
 
         # Project 2: storage-capacitor dielectric physics (hk_l / hk_r).
@@ -308,15 +325,15 @@ class MosfetSimulator:
         CreateSiliconOxideInterface(self.name, "bulk_hk_r")
 
     # ------------------------------------------------------------------
-    # 2) 풀기
+    # 2) Solve
     # ------------------------------------------------------------------
     def solve_equilibrium(self) -> None:
-        """모든 접점 0 V에서 Poisson을 수렴시킨다 (다음 단계의 초기값)."""
+        """Converge Poisson with all contacts at 0V (initial value for the next stage)."""
         devsim.solve(type="dc", absolute_error=1.0e-13, relative_error=1.0e-10,
                      maximum_iterations=80)
 
     def enable_transport(self) -> None:
-        """전자/정공을 미지수로 추가하고 drift-diffusion 방정식을 켠다."""
+        """Add electrons/holes as unknowns and turn on the drift-diffusion equations."""
         CreateSolution(self.name, "bulk", "Electrons")
         CreateSolution(self.name, "bulk", "Holes")
         devsim.set_node_values(device=self.name, region="bulk", name="Electrons",
@@ -333,7 +350,7 @@ class MosfetSimulator:
                      maximum_iterations=80)
 
     def set_bias(self, contact: str, volts: float) -> None:
-        """전압을 RAMP_STEP_V 간격으로 나눠 올리며 매 스텝 다시 푼다."""
+        """Ramp the voltage up in RAMP_STEP_V steps, re-solving at each step."""
         start = self.bias[contact]
         steps = max(1, math.ceil(abs(volts - start) / self.RAMP_STEP_V - 1.0e-9))
         for i in range(1, steps + 1):
@@ -344,10 +361,10 @@ class MosfetSimulator:
         self.bias[contact] = volts
 
     # ------------------------------------------------------------------
-    # 3) 물리량 추출
+    # 3) Extract quantities
     # ------------------------------------------------------------------
     def drain_current(self) -> float:
-        """드레인 접점의 전자+정공 전류 [A/µm] (2-D 해는 A/cm로 나옴)."""
+        """Electron+hole current at the drain contact [A/um] (the 2-D solution comes out in A/cm)."""
         electron = devsim.get_contact_current(device=self.name, contact="drain",
                                               equation="ElectronContinuityEquation")
         hole = devsim.get_contact_current(device=self.name, contact="drain",
@@ -355,13 +372,12 @@ class MosfetSimulator:
         return (electron + hole) * UM
 
     def gate_charge(self) -> float:
-        """게이트 접점의 전하 [C/cm]."""
+        """Charge at the gate contact [C/cm]."""
         return devsim.get_contact_charge(device=self.name, contact="gate",
                                          equation="PotentialEquation")
 
-
     def plate_charge(self) -> float:
-        """저장용량 판 접점의 전하 [C/cm]."""
+        """Charge at the storage-capacitor plate contacts [C/cm]."""
         ql = devsim.get_contact_charge(device=self.name, contact="plate_l",
                                        equation="PotentialEquation")
         qr = devsim.get_contact_charge(device=self.name, contact="plate_r",
@@ -369,7 +385,7 @@ class MosfetSimulator:
         return ql + qr
 
     def plate_capacitance(self, vdd: float) -> float:
-        """저장용량 판 접점의 C_STORE [F/µm] (dQ/dV)."""
+        """C_STORE from the storage-capacitor plate contacts [F/um] (dQ/dV)."""
         self.set_bias("plate_l", vdd / 2.0)
         self.set_bias("plate_r", vdd / 2.0)
         q1 = self.plate_charge()
@@ -379,10 +395,10 @@ class MosfetSimulator:
         return (q2 - q1) * UM / 0.01
          
     # ------------------------------------------------------------------
-    # 4) 스윕
+    # 4) Sweeps
     # ------------------------------------------------------------------
     def sweep_idvg(self, vd: float, start: float, stop: float, step: float) -> pd.DataFrame:
-        """드레인 전압을 고정하고 Vg를 스윕하여 (Vg, Id) 표를 돌려준다."""
+        """Fix the drain voltage and sweep Vg, returning a (Vg, Id) table."""
         self.set_bias("drain", vd)
         vgs = voltage_points(start, stop, step)
         ids = []
@@ -392,14 +408,13 @@ class MosfetSimulator:
         return pd.DataFrame({"Vg_V": vgs, "Id_A_per_um": ids})
 
     def sweep_idvd(self, vg: float, start: float, stop: float, step: float) -> pd.DataFrame:
-        """[과제] 게이트 전압을 고정하고 Vd를 스윕하여 (Vd, Id) 표를 돌려준다.
+        """[Assignment] Fix the gate voltage and sweep Vd, returning a (Vd, Id) table.
 
-        sweep_idvg와 거의 같다 — 어느 접점이 고정되고 어느 접점이 변하는가?
+        Nearly identical to sweep_idvg -- which contact is fixed and which one varies?
         """
 
-        # We first need to set Gate Voltage to Vg, we go through Vd values 
-        # from start to stop and for each step we set Drain Voltage to Vd and 
-        # get Current value Id and finally return
+        # Fix the gate voltage to vg, then sweep Vd from start to stop,
+        # setting the drain voltage at each step and recording Id.
 
         self.set_bias("gate", vg) 
         vds = voltage_points(start, stop, step)
@@ -410,17 +425,15 @@ class MosfetSimulator:
         return pd.DataFrame({"Vd_V": vds, "Id_A_per_um": ids})
 
     def sweep_cv(self, start: float, stop: float, step: float) -> pd.DataFrame:
-        """[과제] Vg를 스윕하며 게이트 전하의 기울기 dQg/dVg로 (Vg, Cgg) 표를 돌려준다.
+        """[Assignment] Sweep Vg and return a (Vg, Cgg) table from the slope dQg/dVg.
 
-        quasi-static C-V는 enable_transport() 없이 평형 상태에서 계산한다.
-        힌트: 전압마다 gate_charge()를 모은 뒤 np.gradient(전하, 전압)로
-        기울기를 구하고, * UM 으로 F/µm 단위로 바꾼다.
+        Quasi-static C-V is computed at equilibrium, without enable_transport().
+        Hint: collect gate_charge() at each voltage, take np.gradient(charge, voltage)
+        for the slope, then *UM to convert to F/um.
         """
-        
-        # We go through Vg values from start to stop and for each step
-        # we set Gate Voltage to Vg and get Charge value Qg
-        # After that we calculate gradient to find Capacitance Cgg,
-        # fix measurement unit multplying by UM and finally return
+
+        # Sweep Vg from start to stop, recording the gate charge Qg at each
+        # step, then take the gradient to get Cgg and convert units with *UM.
 
         vgs = voltage_points(start, stop, step)
         charges = []
@@ -432,11 +445,41 @@ class MosfetSimulator:
         capacitances = np.gradient(charges, vgs) * UM
         return pd.DataFrame({"Vg_V": vgs, "Cgg_F_per_um": capacitances})
 
+    # Project 1: gate work function fix
+    def _work_function_offset(self) -> float:
+        """Vfb = Phi_M - Phi_i [V]. Phi_i = chi_Si + Eg/2 is the reference
+        work function implicit in DEVSIM's intrinsic-level potential
+        convention (the body's own -phi_F offset is already handled by
+        CreateSiliconPotentialOnlyContact, so it must NOT be added again here)."""
+        chi_si = 4.05   # Si electron affinity [eV]
+        Eg = 1.12       # Si bandgap at 300K [eV]
+        phi_i = chi_si + Eg / 2
+        return PHI_M_TABLE[self.silicon_gate_metal_name] - phi_i
+
+    def _create_gate_contact_with_workfunction(self) -> None:
+        """Replaces CreateOxideContact for the gate only, adding the Vfb
+        offset so silicon_gate_metal_name actually affects Vth."""
+        vfb = self._work_function_offset()
+        contact_bias_name = GetContactBiasName("gate")
+        contact_model_name = GetContactNodeModelName("gate")
+
+        eq = "Potential - ({0} - {1:.6e})".format(contact_bias_name, vfb)
+        CreateContactNodeModel(self.name, "gate", contact_model_name, eq)
+        CreateContactNodeModelDerivative(self.name, "gate", contact_model_name, eq, "Potential")
+
+        if not InEdgeModelList(self.name, "oxide", "contactcharge_edge"):
+            CreateEdgeModel(self.name, "oxide", "contactcharge_edge", "Permittivity*ElectricField")
+            CreateEdgeModelDerivatives(self.name, "oxide", "contactcharge_edge",
+                                        "Permittivity*ElectricField", "Potential")
+
+        devsim.contact_equation(
+            device=self.name, contact="gate", name="PotentialEquation",
+            node_model=contact_model_name, edge_charge_model="contactcharge_edge")
 
     # Project 1 : Calculate concentration based on temperature
     def _intrinsic_concentration(self, T: float) -> float:
-        Eg0, alpha, beta = 1.166, 4.73e-4, 636.0  # Costanti di Varshni per il Si
-        Eg_T = Eg0 - alpha * T**2 / (T + beta)     # Bandgap Eg(T) a temperatura T
+        Eg0, alpha, beta = 1.166, 4.73e-4, 636.0  # Si Varshni constants
+        Eg_T = Eg0 - alpha * T**2 / (T + beta)     # Bandgap Eg(T) at temperature T
         Eg_300 = Eg0 - alpha * 300.0**2 / (300.0 + beta)
         ni_300 = 1.0e10
         return ni_300 * (T / 300.0) ** 1.5 * math.exp(
