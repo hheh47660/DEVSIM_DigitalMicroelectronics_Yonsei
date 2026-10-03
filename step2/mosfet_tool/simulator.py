@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import devsim
 import numpy as np
@@ -32,6 +33,8 @@ from .config import Device
 UM = 1.0e-4  # 1 µm in cm (DEVSIM 내부 단위는 cm)
 NM = 1.0e-7  # 1 nm in cm
 
+# Project 1 : Boltzmann Constant
+KB_EV = 8.617333262145e-5
 
 def voltage_points(start: float, stop: float, step: float) -> np.ndarray:
     """start에서 stop까지 step 간격의 전압 배열을 만든다 (practice.py의 np.arange 참고)."""
@@ -55,6 +58,12 @@ class MosfetSimulator:
     DY_BULK = 50.0 * NM
     RAMP_STEP_V = 0.1
 
+    # Project 2: storage-capacitor pillar width and mesh resolution.
+    # 0.1 um matches the assignment's own 2-D estimate example
+    # ("C ~ eps*eps0*Lfacing/t per um, x W = 0.1 um").
+    CAP_PILLAR_WIDTH_UM = 0.1
+    DX_CAP = 2.5 * NM  # fine x-spacing, comparable to the 3-10nm dielectric thickness range
+
     def __init__(self, device: Device, name: str = "mos_light"):
         self.dev = device
         self.name = name
@@ -64,8 +73,26 @@ class MosfetSimulator:
         self.x_right = self.x_gate_right + device.drain_length_um * UM
         self.y_oxide_top = -device.oxide_thickness_nm * NM
         self.y_junction = device.junction_depth_um * UM
-        self.y_bottom = device.silicon_thickness_um * UM
+        self.y_bottom = device.silicon_thickness_um * UM        
         self.bias = {"gate": 0.0, "source": 0.0, "drain": 0.0, "body": 0.0}
+
+        # Project 1 : Add gate_metal
+        self.y_gate_top = self.y_oxide_top - 10.0 * NM
+        self.silicon_gate_metal_name = device.silicon_gate_metal_name
+
+        # Project 2: storage capacitor geometry (1T1C cell).
+        # The pillar sits centered over the source region, so it must fit
+        # entirely between x=0 and x=x_gate_left: if source_length_um is
+        # too small for the chosen cap_height_um/cap_dielectric_thickness_nm,
+        # the capacitor will overlap the gate oxide region.
+        tdiel_cm = device.cap_dielectric_thickness_nm * NM
+        self.y_cap_top = -device.cap_height_um * UM  # negative y = above the silicon surface
+        self.x_pillar_center = self.x_gate_left / 2.0
+        self.x_pillar_left = self.x_pillar_center - 0.5 * self.CAP_PILLAR_WIDTH_UM * UM
+        self.x_pillar_right = self.x_pillar_center + 0.5 * self.CAP_PILLAR_WIDTH_UM * UM
+        self.x_hk_l_left = self.x_pillar_left - tdiel_cm
+        self.x_hk_r_right = self.x_pillar_right + tdiel_cm
+        self.cap_dielectric_material = device.cap_dielectric_material
 
     # ------------------------------------------------------------------
     # 1) 구조 만들기
@@ -75,6 +102,11 @@ class MosfetSimulator:
         self._clear_session()
         self._build_mesh()
         self._build_doping()
+
+        # Project 1 : Save device design
+        design_file = Path(__file__).resolve().parents[2] / "project1" / "part2_2026848368.devsim"
+        devsim.write_devices(file=str(design_file), device=self.name, type="devsim")
+
         self._build_physics()
 
     def _clear_session(self) -> None:
@@ -91,10 +123,19 @@ class MosfetSimulator:
         y_min, y_max = self.y_oxide_top - pad, self.y_bottom + pad
 
         devsim.create_2d_mesh(mesh=self.mesh)
-        for pos in (x_min, 0.0, self.x_gate_left, self.x_gate_right, self.x_right, x_max):
-            devsim.add_2d_mesh_line(mesh=self.mesh, dir="x", pos=pos, ps=self.DX_CHANNEL)
+        # Project 2: added the four x-boundaries of the storage capacitor
+        # (hk_l outer face, pillar left/right faces, hk_r outer face),
+        # inserted between the device's left edge and the gate.
+        for pos in (x_min, 0.0,
+                    self.x_hk_l_left, self.x_pillar_left,
+                    self.x_pillar_right, self.x_hk_r_right,
+                    self.x_gate_left, self.x_gate_right, self.x_right, x_max):
+            devsim.add_2d_mesh_line(mesh=self.mesh, dir="x", pos=pos, ps=self.DX_CAP)
         for pos, spacing in (
             (y_min, self.DY_BULK),
+            (self.y_gate_top, self.DY_OXIDE), # Project 1: Add gate_material
+            # Project 2: top boundary of the storage capacitor (pillar + hk slabs)
+            (self.y_cap_top, self.DY_OXIDE),
             (self.y_oxide_top, self.DY_OXIDE),
             (0.0, min(self.DY_OXIDE, self.DY_JUNCTION)),
             (self.y_junction, self.DY_JUNCTION),
@@ -110,6 +151,28 @@ class MosfetSimulator:
                              xl=self.x_gate_left, xh=self.x_gate_right,
                              yl=0.0, yh=self.y_oxide_top)
 
+        # Project 1 : Add gate_material
+        devsim.add_2d_region(mesh=self.mesh, material=self.silicon_gate_metal_name, 
+                             region="gate_metal", xl=self.x_gate_left, xh=self.x_gate_right,
+                             yl=self.y_oxide_top, yh=self.y_gate_top)
+
+        # Project 2: storage capacitor — equation-free conductive pillar
+        # (region name starts with "metal", so the TA physics leaves it alone;
+        # it only gives geometric shape between the two dielectric slabs).
+        devsim.add_2d_region(mesh=self.mesh, material="metal", region="metal_pillar",
+                             xl=self.x_pillar_left, xh=self.x_pillar_right,
+                             yl=self.y_cap_top, yh=0.0)
+
+        # Project 2: storage capacitor dielectric, left and right slabs
+        # (region names must start with "hk"; material = dielectric name
+        # from the table, e.g. "HfO2").
+        devsim.add_2d_region(mesh=self.mesh, material=self.cap_dielectric_material,
+                             region="hk_l", xl=self.x_hk_l_left, xh=self.x_pillar_left,
+                             yl=self.y_cap_top, yh=0.0)
+        devsim.add_2d_region(mesh=self.mesh, material=self.cap_dielectric_material,
+                             region="hk_r", xl=self.x_pillar_right, xh=self.x_hk_r_right,
+                             yl=self.y_cap_top, yh=0.0)
+
         devsim.add_2d_contact(mesh=self.mesh, name="gate", region="oxide", material="metal",
                               xl=self.x_gate_left, xh=self.x_gate_right,
                               yl=self.y_oxide_top, yh=self.y_oxide_top)
@@ -119,8 +182,39 @@ class MosfetSimulator:
                               xl=self.x_gate_right, xh=x_max, yl=0.0, yh=0.0)
         devsim.add_2d_contact(mesh=self.mesh, name="body", region="bulk", material="metal",
                               xl=x_min, xh=x_max, yl=self.y_bottom, yh=self.y_bottom)
+
+        # Project 2: storage node contacts — inner faces of the dielectric
+        # slabs, facing the equation-free metal pillar (same pattern as
+        # "gate" on "oxide": the contact sits on the region that carries
+        # equations, not on the equation-free metal region).
+        devsim.add_2d_contact(mesh=self.mesh, name="storage_l", region="hk_l", material="metal",
+                              xl=self.x_pillar_left, xh=self.x_pillar_left,
+                              yl=self.y_cap_top, yh=0.0)
+        devsim.add_2d_contact(mesh=self.mesh, name="storage_r", region="hk_r", material="metal",
+                              xl=self.x_pillar_right, xh=self.x_pillar_right,
+                              yl=self.y_cap_top, yh=0.0)
+
+        # Project 2: plate contacts — outer faces of the dielectric slabs
+        # (held at VDD/2 during read/retention); dQ/dV of these gives C_STORE.
+        devsim.add_2d_contact(mesh=self.mesh, name="plate_l", region="hk_l", material="metal",
+                              xl=self.x_hk_l_left, xh=self.x_hk_l_left,
+                              yl=self.y_cap_top, yh=0.0)
+        devsim.add_2d_contact(mesh=self.mesh, name="plate_r", region="hk_r", material="metal",
+                              xl=self.x_hk_r_right, xh=self.x_hk_r_right,
+                              yl=self.y_cap_top, yh=0.0)
+
         devsim.add_2d_interface(mesh=self.mesh, name="bulk_oxide",
                                 region0="bulk", region1="oxide")
+
+        # Project 2: interfaces where the dielectric slabs touch silicon
+        # at the surface (required: "an interface wherever bulk/oxide/hk
+        # regions touch"). No interface is added between metal_pillar and
+        # bulk/hk, since the pillar is equation-free.
+        devsim.add_2d_interface(mesh=self.mesh, name="bulk_hk_l",
+                                region0="bulk", region1="hk_l")
+        devsim.add_2d_interface(mesh=self.mesh, name="bulk_hk_r",
+                                region0="bulk", region1="hk_r")
+
         devsim.finalize_mesh(mesh=self.mesh)
         devsim.create_device(mesh=self.mesh, device=self.name)
 
@@ -145,11 +239,23 @@ class MosfetSimulator:
         )
 
     def _build_physics(self) -> None:
+        # Project 1 : Add 128-bit extended precision for convergece
+        devsim.set_parameter(name="extended_precision", value=True)
+        devsim.set_parameter(name="extended_solver", value=True)
+        devsim.set_parameter(name="extended_model", value=True)
+
+
         for region in ("bulk", "oxide"):
             CreateSolution(self.name, region, "Potential")
         SetSiliconParameters(self.name, "bulk", self.dev.temperature_k)
         devsim.set_parameter(device=self.name, region="bulk", name="mu_n", value=self.MU_N)
         devsim.set_parameter(device=self.name, region="bulk", name="mu_p", value=self.MU_P)
+
+        # Project 1: Add concentretion temperature dependent
+        ni_T = self._intrinsic_concentration(self.dev.temperature_k)
+        for param_name in ("n_i", "n1", "p1"):
+            devsim.set_parameter(device=self.name, region="bulk", name=param_name, value=ni_T)
+
         CreateSiliconPotentialOnly(self.name, "bulk")
         SetOxideParameters(self.name, "oxide", self.dev.temperature_k)
         CreateOxidePotentialOnly(self.name, "oxide", "log_damp")
@@ -265,3 +371,14 @@ class MosfetSimulator:
 
         capacitances = np.gradient(charges, vgs) * UM
         return pd.DataFrame({"Vg_V": vgs, "Cgg_F_per_um": capacitances})
+
+
+    # Project 1 : Calculate concentration based on temperature
+    def _intrinsic_concentration(self, T: float) -> float:
+        Eg0, alpha, beta = 1.166, 4.73e-4, 636.0  # Costanti di Varshni per il Si
+        Eg_T = Eg0 - alpha * T**2 / (T + beta)     # Bandgap Eg(T) a temperatura T
+        Eg_300 = Eg0 - alpha * 300.0**2 / (300.0 + beta)
+        ni_300 = 1.0e10
+        return ni_300 * (T / 300.0) ** 1.5 * math.exp(
+                -Eg_T / (2 * KB_EV * T) + Eg_300 / (2 * KB_EV * 300.0)
+            )

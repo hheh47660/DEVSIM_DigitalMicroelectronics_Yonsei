@@ -14,7 +14,7 @@ class Device:
     """소자 치수와 도핑 (단위는 필드 이름에 표시)."""
 
     gate_length_um: float = 1.0
-    source_length_um: float = 0.5
+    source_length_um: float = 1.5
     drain_length_um: float = 0.5
     oxide_thickness_nm: float = 10.0
     silicon_thickness_um: float = 0.5
@@ -22,6 +22,12 @@ class Device:
     body_doping_cm3: float = 1.0e16
     sd_doping_cm3: float = 1.0e19
     temperature_k: float = 300.0
+    silicon_gate_metal_name: str = "TaN" # Project 1 : Added gate's material
+
+    # --- Capacitor C_STORE Design Knobs (Project 1 - Part 2) ---
+    cap_height_um: float = 0.8           # h: 0.2 - 1.5 um
+    cap_dielectric_thickness_nm: float = 5.0            # tdiel: 3 - 10 nm (1V / tdiel <= 4 MV/cm)
+    cap_dielectric_material: str = "ZrO2"# SiO2 (3.9), Al2O3 (9), HfO2 (20), ZrO2 (35)
 
 
 def load_config(path: str | Path) -> tuple[Device, dict]:
