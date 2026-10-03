@@ -359,6 +359,25 @@ class MosfetSimulator:
         return devsim.get_contact_charge(device=self.name, contact="gate",
                                          equation="PotentialEquation")
 
+
+    def plate_charge(self) -> float:
+        """저장용량 판 접점의 전하 [C/cm]."""
+        ql = devsim.get_contact_charge(device=self.name, contact="plate_l",
+                                       equation="PotentialEquation")
+        qr = devsim.get_contact_charge(device=self.name, contact="plate_r",
+                                       equation="PotentialEquation")
+        return ql + qr
+
+    def plate_capacitance(self, vdd: float) -> float:
+        """저장용량 판 접점의 C_STORE [F/µm] (dQ/dV)."""
+        self.set_bias("plate_l", vdd / 2.0)
+        self.set_bias("plate_r", vdd / 2.0)
+        q1 = self.plate_charge()
+        self.set_bias("plate_l", vdd / 2.0 + 0.01)
+        self.set_bias("plate_r", vdd / 2.0 + 0.01)
+        q2 = self.plate_charge()
+        return (q2 - q1) * UM / 0.01
+         
     # ------------------------------------------------------------------
     # 4) 스윕
     # ------------------------------------------------------------------
