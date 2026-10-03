@@ -36,6 +36,15 @@ NM = 1.0e-7  # 1 nm in cm
 # Project 1 : Boltzmann Constant
 KB_EV = 8.617333262145e-5
 
+# Project 2: relative permittivity of each allowed capacitor dielectric
+# (from the assignment's material table)
+DIELECTRIC_EPS_R_TABLE = {
+    "SiO2": 3.9,
+    "Al2O3": 9.0,
+    "HfO2": 20.0,
+    "ZrO2": 35.0,
+}
+
 def voltage_points(start: float, stop: float, step: float) -> np.ndarray:
     """start에서 stop까지 step 간격의 전압 배열을 만든다 (practice.py의 np.arange 참고)."""
     count = round(abs(stop - start) / step)
@@ -244,7 +253,6 @@ class MosfetSimulator:
         devsim.set_parameter(name="extended_solver", value=True)
         devsim.set_parameter(name="extended_model", value=True)
 
-
         for region in ("bulk", "oxide"):
             CreateSolution(self.name, region, "Potential")
         SetSiliconParameters(self.name, "bulk", self.dev.temperature_k)
@@ -261,10 +269,43 @@ class MosfetSimulator:
         CreateOxidePotentialOnly(self.name, "oxide", "log_damp")
         CreateOxideContact(self.name, "oxide", "gate")
         devsim.set_parameter(device=self.name, name=GetContactBiasName("gate"), value=0.0)
+
+        # Project 2: storage-capacitor dielectric physics (hk_l / hk_r).
+        # CreateOxidePotentialOnly is generic — it only needs "Permittivity"
+        # already set on the region, so we replicate SetOxideParameters
+        # ourselves using the chosen material's relative permittivity
+        # instead of the library's hardcoded eps_ox=3.9 (SiO2 only).
+        eps_r = DIELECTRIC_EPS_R_TABLE[self.cap_dielectric_material]
+        EPS_0 = 8.85e-14  # F/cm, same constant simple_physics.py uses internally
+        for region in ("hk_l", "hk_r"):
+            devsim.set_parameter(device=self.name, region=region, name="Permittivity",
+                                 value=eps_r * EPS_0)
+            devsim.set_parameter(device=self.name, region=region, name="ElectronCharge",
+                                 value=1.6e-19)
+            CreateOxidePotentialOnly(self.name, region, "log_damp")
+
+        # Project 2: storage node and plate contacts. CreateOxideContact
+        # just ties Potential to an external bias on the contact's own
+        # region, so it works unchanged here — same mechanism as "gate" on
+        # "oxide", called twice per region (storage_* and plate_* both sit
+        # on hk_l / hk_r, exactly like source/drain/body all sit on "bulk").
+        CreateOxideContact(self.name, "hk_l", "storage_l")
+        CreateOxideContact(self.name, "hk_l", "plate_l")
+        CreateOxideContact(self.name, "hk_r", "storage_r")
+        CreateOxideContact(self.name, "hk_r", "plate_r")
+        for contact in ("storage_l", "plate_l", "storage_r", "plate_r"):
+            devsim.set_parameter(device=self.name, name=GetContactBiasName(contact), value=0.0)
+
         for contact in ("source", "drain", "body"):
             CreateSiliconPotentialOnlyContact(self.name, "bulk", contact)
             devsim.set_parameter(device=self.name, name=GetContactBiasName(contact), value=0.0)
         CreateSiliconOxideInterface(self.name, "bulk_oxide")
+
+        # Project 2: continuous-potential interfaces where the dielectric
+        # slabs touch silicon — CreateSiliconOxideInterface is also generic
+        # despite the name, it works for any two regions by name.
+        CreateSiliconOxideInterface(self.name, "bulk_hk_l")
+        CreateSiliconOxideInterface(self.name, "bulk_hk_r")
 
     # ------------------------------------------------------------------
     # 2) 풀기
