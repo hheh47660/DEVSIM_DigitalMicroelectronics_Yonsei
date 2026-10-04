@@ -157,11 +157,17 @@ class MosfetSimulator:
             equation=(f"0.25*{nd:.6e}*erfc(-(x-{self.x_gate_right:.6e})/{decay_x:.6e})"
                       f"*erfc((y-{self.y_junction:.6e})/{decay_y:.6e})"),
         )
+
+        tap_doping = self.dev.body_tap_doping_cm3  
+        devsim.node_model(
+            device=self.name, region="bulk", name="BodyTapDoping",
+            equation=(f"0.25*{tap_doping:.6e}*erfc((x-{self.x_body_right:.6e})/{decay_x:.6e})"
+                    f"*erfc((y-{self.y_junction:.6e})/{decay_y:.6e})"),
+        )
         devsim.node_model(
             device=self.name, region="bulk", name="NetDoping",
-            equation=f"SourceDoping + DrainDoping - {na:.6e}",
+            equation=f"SourceDoping + DrainDoping - {na:.6e} - BodyTapDoping",
         )
-
     def _build_physics(self) -> None:
         # Project 1 : Add 128-bit extended precision for convergece
         devsim.set_parameter(name="extended_precision", value=True)
@@ -172,13 +178,20 @@ class MosfetSimulator:
         for region in ("bulk", "oxide"):
             CreateSolution(self.name, region, "Potential")
         SetSiliconParameters(self.name, "bulk", self.dev.temperature_k)
-        devsim.set_parameter(device=self.name, region="bulk", name="mu_n", value=self.MU_N)
-        devsim.set_parameter(device=self.name, region="bulk", name="mu_p", value=self.MU_P)
+        # Project 1 : Add temperature dependent mobility
+        devsim.set_parameter(device=self.name, region="bulk", name="mu_n",
+            value=400 * (self.dev.temperature_k / 300.0) ** -2.4)
+        devsim.set_parameter(device=self.name, region="bulk", name="mu_p", 
+            value=200 * (self.dev.temperature_k / 300.0) ** -2.2)
 
-        # Project 1: Add concentretion temperature dependent
+        # Project 1: Add temperature dependent concentretion 
         ni_T = self._intrinsic_concentration(self.dev.temperature_k)
         for param_name in ("n_i", "n1", "p1"):
             devsim.set_parameter(device=self.name, region="bulk", name=param_name, value=ni_T)
+
+        # Project 1: gate work function fix (replaces plain CreateOxideContact)
+        self._create_gate_contact_with_workfunction()
+        devsim.set_parameter(device=self.name, name=GetContactBiasName("gate"), value=0.0)
 
         CreateSiliconPotentialOnly(self.name, "bulk")
         SetOxideParameters(self.name, "oxide", self.dev.temperature_k)
@@ -299,10 +312,30 @@ class MosfetSimulator:
 
     # Project 1 : Calculate concentration based on temperature
     def _intrinsic_concentration(self, T: float) -> float:
-        Eg0, alpha, beta = 1.166, 4.73e-4, 636.0  # Costanti di Varshni per il Si
-        Eg_T = Eg0 - alpha * T**2 / (T + beta)     # Bandgap Eg(T) a temperatura T
+        Eg0, alpha, beta = 1.166, 4.73e-4, 636.0 
+        Eg_T = Eg0 - alpha * T**2 / (T + beta)   
         Eg_300 = Eg0 - alpha * 300.0**2 / (300.0 + beta)
         ni_300 = 1.0e10
         return ni_300 * (T / 300.0) ** 1.5 * math.exp(
                 -Eg_T / (2 * KB_EV * T) + Eg_300 / (2 * KB_EV * 300.0)
             )
+    # Project 1 : Create gate contact with workfunction
+    def _create_gate_contact_with_workfunction(self) -> None:
+        """Replaces CreateOxideContact for the gate only, adding the Vfb
+        offset so silicon_gate_metal_name actually affects Vth."""
+        vfb = self._work_function_offset()
+        contact_bias_name = GetContactBiasName("gate")
+        contact_model_name = GetContactNodeModelName("gate")
+
+        eq = "Potential - ({0} - {1:.6e})".format(contact_bias_name, vfb)
+        CreateContactNodeModel(self.name, "gate", contact_model_name, eq)
+        CreateContactNodeModelDerivative(self.name, "gate", contact_model_name, eq, "Potential")
+
+        if not InEdgeModelList(self.name, "oxide", "contactcharge_edge"):
+            CreateEdgeModel(self.name, "oxide", "contactcharge_edge", "Permittivity*ElectricField")
+            CreateEdgeModelDerivatives(self.name, "oxide", "contactcharge_edge",
+                                        "Permittivity*ElectricField", "Potential")
+
+        devsim.contact_equation(
+            device=self.name, contact="gate", name="PotentialEquation",
+            node_model=contact_model_name, edge_charge_model="contactcharge_edge")
