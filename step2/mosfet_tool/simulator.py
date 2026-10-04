@@ -121,7 +121,7 @@ class MosfetSimulator:
         y_min, y_max = self.y_oxide_top - pad, self.y_bottom + pad
 
         devsim.create_2d_mesh(mesh=self.mesh)
-        for pos in (x_min, 0.0, self.x_gate_left, self.x_gate_right, self.x_right, x_max):
+        for pos in (x_min, 0.0, self.x_body_right, self.x_gate_left, self.x_gate_right, self.x_right, x_max):
             devsim.add_2d_mesh_line(mesh=self.mesh, dir="x", pos=pos, ps=self.DX_CHANNEL)
         for pos, spacing in (
             (y_min, self.DY_BULK),
@@ -202,26 +202,26 @@ class MosfetSimulator:
         for region in ("bulk", "oxide"):
             CreateSolution(self.name, region, "Potential")
         SetSiliconParameters(self.name, "bulk", self.dev.temperature_k)
-        # Project 1 : Add temperature dependent mobility
-        devsim.set_parameter(device=self.name, region="bulk", name="mu_n",
-            value=400 * (self.dev.temperature_k / 300.0) ** -2.4)
-        devsim.set_parameter(device=self.name, region="bulk", name="mu_p", 
-            value=200 * (self.dev.temperature_k / 300.0) ** -2.2)
+        # Project 1 : Note, you don't need to change these constants
+        devsim.set_parameter(device=self.name, region="bulk", name="mu_n", value=self.MU_N)
+        devsim.set_parameter(device=self.name, region="bulk", name="mu_p", value=self.MU_P)
 
         # Project 1: Add temperature dependent concentretion 
         ni_T = self._intrinsic_concentration(self.dev.temperature_k)
         for param_name in ("n_i", "n1", "p1"):
             devsim.set_parameter(device=self.name, region="bulk", name=param_name, value=ni_T)
 
-        # Project 1: gate work function fix (replaces plain CreateOxideContact)
-        self._create_gate_contact_with_workfunction()
-        devsim.set_parameter(device=self.name, name=GetContactBiasName("gate"), value=0.0)
 
         CreateSiliconPotentialOnly(self.name, "bulk")
         SetOxideParameters(self.name, "oxide", self.dev.temperature_k)
         CreateOxidePotentialOnly(self.name, "oxide", "log_damp")
-        CreateOxideContact(self.name, "oxide", "gate")
+        
+        
+        
+        # Project 1: gate work function fix (replaces plain CreateOxideContact)
+        self._create_gate_contact_with_workfunction()
         devsim.set_parameter(device=self.name, name=GetContactBiasName("gate"), value=0.0)
+        
         for contact in ("source", "drain", "body"):
             CreateSiliconPotentialOnlyContact(self.name, "bulk", contact)
             devsim.set_parameter(device=self.name, name=GetContactBiasName(contact), value=0.0)
