@@ -24,6 +24,8 @@ class Device:
     temperature_k: float = 300.0
     silicon_gate_metal_name: str = "TaN" # Project 1 : Added gate's material
 
+    body_tap_doping_cm3: float = 1.0e16  # Project 1 : Added body tap doping
+
     # --- Capacitor C_STORE Design Knobs (Project 1 - Part 2) ---
     cap_height_um: float = 0.8           # h: 0.2 - 1.5 um
     cap_dielectric_thickness_nm: float = 5.0            # tdiel: 3 - 10 nm (1V / tdiel <= 4 MV/cm)

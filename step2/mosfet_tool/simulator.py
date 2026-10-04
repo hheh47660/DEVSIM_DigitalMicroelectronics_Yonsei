@@ -88,11 +88,23 @@ class MosfetSimulator:
     CAP_PILLAR_WIDTH_UM = 0.1
     DX_CAP = 2.5 * NM  # fine x-spacing, comparable to the 3-10nm dielectric thickness range
 
+    # Project 2 (body tap): width of the p+ body contact placed at the
+    # surface, to the left of the source -- matches the assignment's
+    # "Example Cell" figure ("contact body (on p+ tap)" left of source),
+    # instead of the earlier bottom-of-device body contact.
+    BODY_TAP_WIDTH_UM = 0.1
+
     def __init__(self, device: Device, name: str = "mos_light"):
         self.dev = device
         self.name = name
         self.mesh = f"{name}_mesh"
-        self.x_gate_left = device.source_length_um * UM
+
+        # Project 2 (body tap): the p+ tap now occupies the left end of the
+        # device, so x_gate_left (and everything right of it) is shifted by
+        # BODY_TAP_WIDTH_UM. source_length_um must be large enough to fit
+        # the tap, the N+ source doping decay, and the storage capacitor.
+        self.x_body_right = self.BODY_TAP_WIDTH_UM * UM
+        self.x_gate_left = self.x_body_right + device.source_length_um * UM
         self.x_gate_right = self.x_gate_left + device.gate_length_um * UM
         self.x_right = self.x_gate_right + device.drain_length_um * UM
         self.y_oxide_top = -device.oxide_thickness_nm * NM
@@ -106,13 +118,12 @@ class MosfetSimulator:
         self.silicon_gate_metal_name = device.silicon_gate_metal_name
 
         # Project 2: storage capacitor geometry (1T1C cell).
-        # The pillar sits centered over the source region, so it must fit
-        # entirely between x=0 and x=x_gate_left: if source_length_um is
-        # too small for the chosen cap_height_um/cap_dielectric_thickness_nm,
-        # the capacitor will overlap the gate oxide region.
+        # The pillar sits centered over the N+ source span only (between
+        # the body tap and the gate), so it must fit entirely between
+        # x_body_right and x_gate_left.
         tdiel_cm = device.cap_dielectric_thickness_nm * NM
         self.y_cap_top = -device.cap_height_um * UM  # negative y = above the silicon surface
-        self.x_pillar_center = self.x_gate_left / 2.0
+        self.x_pillar_center = (self.x_body_right + self.x_gate_left) / 2.0
         self.x_pillar_left = self.x_pillar_center - 0.5 * self.CAP_PILLAR_WIDTH_UM * UM
         self.x_pillar_right = self.x_pillar_center + 0.5 * self.CAP_PILLAR_WIDTH_UM * UM
         self.x_hk_l_left = self.x_pillar_left - tdiel_cm
@@ -148,10 +159,10 @@ class MosfetSimulator:
         y_min, y_max = self.y_oxide_top - pad, self.y_bottom + pad
 
         devsim.create_2d_mesh(mesh=self.mesh)
-        # Project 2: added the four x-boundaries of the storage capacitor
-        # (hk_l outer face, pillar left/right faces, hk_r outer face),
-        # inserted between the device's left edge and the gate.
-        for pos in (x_min, 0.0,
+        # Project 2: x-boundaries of the body tap, the storage capacitor
+        # (hk_l outer face, pillar left/right faces, hk_r outer face), the
+        # gate, and the drain, all inserted left to right.
+        for pos in (x_min, self.x_body_right,
                     self.x_hk_l_left, self.x_pillar_left,
                     self.x_pillar_right, self.x_hk_r_right,
                     self.x_gate_left, self.x_gate_right, self.x_right, x_max):
@@ -201,12 +212,16 @@ class MosfetSimulator:
         devsim.add_2d_contact(mesh=self.mesh, name="gate", region="oxide", material="metal",
                               xl=self.x_gate_left, xh=self.x_gate_right,
                               yl=self.y_oxide_top, yh=self.y_oxide_top)
+
+        # Project 2 (body tap): body contact moved to the surface, to the
+        # left of source (matches the assignment's example figure), instead
+        # of a contact spanning the whole bottom of the device.
+        devsim.add_2d_contact(mesh=self.mesh, name="body", region="bulk", material="metal",
+                              xl=x_min, xh=self.x_body_right, yl=0.0, yh=0.0)
         devsim.add_2d_contact(mesh=self.mesh, name="source", region="bulk", material="metal",
-                              xl=x_min, xh=self.x_gate_left, yl=0.0, yh=0.0)
+                              xl=self.x_body_right, xh=self.x_gate_left, yl=0.0, yh=0.0)
         devsim.add_2d_contact(mesh=self.mesh, name="drain", region="bulk", material="metal",
                               xl=self.x_gate_right, xh=x_max, yl=0.0, yh=0.0)
-        devsim.add_2d_contact(mesh=self.mesh, name="body", region="bulk", material="metal",
-                              xl=x_min, xh=x_max, yl=self.y_bottom, yh=self.y_bottom)
 
         # Project 2: storage node contacts — inner faces of the dielectric
         # slabs, facing the equation-free metal pillar (same pattern as
@@ -258,22 +273,39 @@ class MosfetSimulator:
             equation=(f"0.25*{nd:.6e}*erfc(-(x-{self.x_gate_right:.6e})/{decay_x:.6e})"
                       f"*erfc((y-{self.y_junction:.6e})/{decay_y:.6e})"),
         )
+        # Project 2 (body tap): localized p+ doping bump around the body
+        # contact, same erfc roll-off shape as the N+ source/drain, but
+        # SUBTRACTED in NetDoping (opposite type) to give the body contact
+        # a heavily p+ surface for a good ohmic contact. Reuses sd_doping_cm3
+        # as the tap's doping magnitude (the assignment doesn't give a
+        # separate value for it, and this keeps it consistent with the S/D
+        # doping level already available).
+        tap_doping = self.dev.body_tap_doping_cm3  # invece di nd/sd_doping_cm3
+        devsim.node_model(
+            device=self.name, region="bulk", name="BodyTapDoping",
+            equation=(f"0.25*{tap_doping:.6e}*erfc((x-{self.x_body_right:.6e})/{decay_x:.6e})"
+                    f"*erfc((y-{self.y_junction:.6e})/{decay_y:.6e})"),
+        )
         devsim.node_model(
             device=self.name, region="bulk", name="NetDoping",
-            equation=f"SourceDoping + DrainDoping - {na:.6e}",
+            equation=f"SourceDoping + DrainDoping - {na:.6e} - BodyTapDoping",
         )
 
     def _build_physics(self) -> None:
         # Project 1 : Add 128-bit extended precision for convergece
-        devsim.set_parameter(name="extended_precision", value=True)
-        devsim.set_parameter(name="extended_solver", value=True)
-        devsim.set_parameter(name="extended_model", value=True)
+        # devsim.set_parameter(name="extended_precision", value=True)
+        # devsim.set_parameter(name="extended_solver", value=True)
+        # devsim.set_parameter(name="extended_model", value=True)
 
         for region in ("bulk", "oxide"):
             CreateSolution(self.name, region, "Potential")
         SetSiliconParameters(self.name, "bulk", self.dev.temperature_k)
-        devsim.set_parameter(device=self.name, region="bulk", name="mu_n", value=self.MU_N)
-        devsim.set_parameter(device=self.name, region="bulk", name="mu_p", value=self.MU_P)
+        #devsim.set_parameter(device=self.name, region="bulk", name="mu_n", value=self.MU_N)
+        #devsim.set_parameter(device=self.name, region="bulk", name="mu_p", value=self.MU_P)
+        devsim.set_parameter(device=self.name, region="bulk", name="mu_n",
+         value=400 * (self.dev.temperature_k / 300.0) ** -2.4)
+        devsim.set_parameter(device=self.name, region="bulk", name="mu_p", 
+         value=200 * (self.dev.temperature_k / 300.0) ** -2.2)
 
         # Project 1: Add concentretion temperature dependent
         ni_T = self._intrinsic_concentration(self.dev.temperature_k)
