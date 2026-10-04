@@ -26,6 +26,12 @@ from devsim.python_packages.simple_physics import (
     GetContactBiasName,
     SetOxideParameters,
     SetSiliconParameters,
+    GetContactNodeModelName,
+    CreateContactNodeModel,
+    CreateContactNodeModelDerivative,
+    InEdgeModelList, 
+    CreateEdgeModel,
+    CreateEdgeModelDerivatives,
 )
 
 from .config import Device
@@ -35,6 +41,13 @@ NM = 1.0e-7  # 1 nm in cm
 
 # Project 1 : Boltzmann Constant
 KB_EV = 8.617333262145e-5
+
+# Project 1 : Add gate work function table for different materials
+PHI_M_TABLE = {
+    "n+ poly-Si": 4.05, "Al": 4.10, "Ta": 4.25, "Ti": 4.33,
+    "TaN": 4.45, "W": 4.60, "TiN": 4.65, "Mo": 4.70,
+    "Ni": 5.10, "p+ poly-Si": 5.15, "Pt": 5.30,
+}
 
 def voltage_points(start: float, stop: float, step: float) -> np.ndarray:
     """start에서 stop까지 step 간격의 전압 배열을 만든다 (practice.py의 np.arange 참고)."""
@@ -58,16 +71,21 @@ class MosfetSimulator:
     DY_BULK = 50.0 * NM
     RAMP_STEP_V = 0.1
 
+    BODY_TAP_WIDTH_UM = 0.1  # Project 1 : Width of the p+ body tap region in µm
+
     def __init__(self, device: Device, name: str = "mos_light"):
         self.dev = device
         self.name = name
         self.mesh = f"{name}_mesh"
-        self.x_gate_left = device.source_length_um * UM
+
+        # Project 1 : Add body p+ region
+        self.x_body_right = self.BODY_TAP_WIDTH_UM * UM
+        self.x_gate_left = self.x_body_right + device.source_length_um * UM
         self.x_gate_right = self.x_gate_left + device.gate_length_um * UM
         self.x_right = self.x_gate_right + device.drain_length_um * UM
         self.y_oxide_top = -device.oxide_thickness_nm * NM
         self.y_junction = device.junction_depth_um * UM
-        self.y_bottom = device.silicon_thickness_um * UM        
+        self.y_bottom = device.silicon_thickness_um * UM       
         self.bias = {"gate": 0.0, "source": 0.0, "drain": 0.0, "body": 0.0}
 
         # Project 1 : Add gate_metal
@@ -131,12 +149,17 @@ class MosfetSimulator:
         devsim.add_2d_contact(mesh=self.mesh, name="gate", region="oxide", material="metal",
                               xl=self.x_gate_left, xh=self.x_gate_right,
                               yl=self.y_oxide_top, yh=self.y_oxide_top)
+        
+
+        # Project 1 : Body contact now is in the top-left corner
+        devsim.add_2d_contact(mesh=self.mesh, name="body", region="bulk", material="metal",
+                              xl=x_min, xh=self.x_body_right, yl=0.0, yh=0.0)
         devsim.add_2d_contact(mesh=self.mesh, name="source", region="bulk", material="metal",
-                              xl=x_min, xh=self.x_gate_left, yl=0.0, yh=0.0)
+                              xl=self.x_body_right, xh=self.x_gate_left, yl=0.0, yh=0.0)
         devsim.add_2d_contact(mesh=self.mesh, name="drain", region="bulk", material="metal",
                               xl=self.x_gate_right, xh=x_max, yl=0.0, yh=0.0)
-        devsim.add_2d_contact(mesh=self.mesh, name="body", region="bulk", material="metal",
-                              xl=x_min, xh=x_max, yl=self.y_bottom, yh=self.y_bottom)
+
+        
         devsim.add_2d_interface(mesh=self.mesh, name="bulk_oxide",
                                 region0="bulk", region1="oxide")
         devsim.finalize_mesh(mesh=self.mesh)
@@ -158,6 +181,7 @@ class MosfetSimulator:
                       f"*erfc((y-{self.y_junction:.6e})/{decay_y:.6e})"),
         )
 
+        # Project 1 : Add p+ body tap doping
         tap_doping = self.dev.body_tap_doping_cm3  
         devsim.node_model(
             device=self.name, region="bulk", name="BodyTapDoping",
@@ -339,3 +363,14 @@ class MosfetSimulator:
         devsim.contact_equation(
             device=self.name, contact="gate", name="PotentialEquation",
             node_model=contact_model_name, edge_charge_model="contactcharge_edge")
+
+    # Project 1: gate work function fix
+    def _work_function_offset(self) -> float:
+        """Vfb = Phi_M - Phi_i [V]. Phi_i = chi_Si + Eg/2 is the reference
+        work function implicit in DEVSIM's intrinsic-level potential
+        convention (the body's own -phi_F offset is already handled by
+        CreateSiliconPotentialOnlyContact, so it must NOT be added again here)."""
+        chi_si = 4.05   # Si electron affinity [eV]
+        Eg = 1.12       # Si bandgap at 300K [eV]
+        phi_i = chi_si + Eg / 2
+        return PHI_M_TABLE[self.silicon_gate_metal_name] - phi_i
