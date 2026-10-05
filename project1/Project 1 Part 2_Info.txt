@@ -1,0 +1,77 @@
+Project 1 - Part 2
+Initial config was: 
+device_cfg = Device(
+        gate_length_um=0.30,  # is fixed
+        source_length_um=0.45,
+        drain_length_um=0.5,
+        oxide_thickness_nm=6.0,
+        silicon_thickness_um=0.5,
+        junction_depth_um=0.1,
+        body_doping_cm3=1.0e16,
+        sd_doping_cm3=1.0e20,
+        temperature_k=398,  # Set the temperature to 125 degC (398 K)
+        silicon_gate_metal_name="Ti",
+        cap_height_um=0.8,
+        cap_dielectric_thickness_nm=5.0,
+        cap_dielectric_material="ZrO2")
+Case with stored value 0: The tension went down by (|V_BL - 1V|): 107.14 mV with V_BL final 0.8929 V -> Positivo -> Da sistemare
+Case with stored value 1: The tension went up by (|V_BL - 1V|): 90.12 mV wth V_BL final 1.0901 V -> Positivo
+Estimated retention time : 1.4348e-08 milliseconds < 64ms -> Total FAIL
+
+--Read 0
+Final V_BL: 0.9099 V
+Read margin (|V_BL - 1V|): 90.12 mV
+PASS: The read margin exceeded the 40 mV threshold.
+
+Estimated retention time: 2.3718e-05 milliseconds
+
+--Read 1
+Final V_BL: 1.0902 V
+Read margin (|V_BL - 1V|): 90.17 mV
+PASS: The read margin exceeded the 40 mV threshold.
+
+Estimated retention time: 2.2793e-05 milliseconds
+
+
+
+
+---------------------------------------
+device_cfg = Device(
+        gate_length_um=0.30,  # is fixed
+        source_length_um=0.45,
+        drain_length_um=0.5,
+        oxide_thickness_nm=5.0, 
+        silicon_thickness_um=0.5,
+        junction_depth_um=0.1,
+        body_doping_cm3=1.0e16,
+        sd_doping_cm3=1.0e20,
+        temperature_k=398,  # Set the temperature to 125 °C (398 K)[cite: 44, 53]
+        silicon_gate_metal_name="Ti",
+        cap_height_um=1.3, ### Changed to 1.3 
+        cap_dielectric_thickness_nm=3.0, ### Changed to 3.0 
+        cap_dielectric_material="ZrO2")
+
+
+Retention time is 1.0869e-08 ms
+
+---------------------------------------
+
+To get retention time I need C_store:
+ def plate_charge(self) -> float:
+        """저장용량 판 접점의 전하 [C/cm]."""
+        ql = devsim.get_contact_charge(device=self.name, contact="plate_l",
+                                       equation="PotentialEquation")
+        qr = devsim.get_contact_charge(device=self.name, contact="plate_r",
+                                       equation="PotentialEquation")
+        return ql + qr
+
+    def plate_capacitance(self, vdd: float) -> float:
+        """저장용량 판 접점의 C_STORE [F/µm] (dQ/dV)."""
+        self.set_bias("plate_l", vdd / 2.0)
+        self.set_bias("plate_r", vdd / 2.0)
+        q1 = self.plate_charge()
+        self.set_bias("plate_l", vdd / 2.0 + 0.01)
+        self.set_bias("plate_r", vdd / 2.0 + 0.01)
+        q2 = self.plate_charge()
+        return (q2 - q1) * UM / 0.01
+         

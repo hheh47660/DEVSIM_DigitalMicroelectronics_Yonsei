@@ -415,13 +415,81 @@ def test_gate_oxide_thickness_effect():
     print("\n")
     print("Results for oxide_thickness_7.0nm:", res3)
 
-
-def main() -> None:
-
-    # This is default
+def test_silicon_thickness_um_effect():
+    
+    
     device1 = Device(
         gate_length_um=0.45,
         source_length_um=0.45,
+        drain_length_um=0.5,
+        oxide_thickness_nm=5.0,
+        silicon_thickness_um=0.3,
+        junction_depth_um=0.1,
+        body_doping_cm3=1.0e16,
+        sd_doping_cm3=1.0e20,
+        temperature_k=300.0,
+        silicon_gate_metal_name="Ti"
+    )
+
+    device2 = Device(
+        gate_length_um=0.45,
+        source_length_um=0.45,
+        drain_length_um=0.5,
+        oxide_thickness_nm=5.0,
+        silicon_thickness_um=1.2,
+        junction_depth_um=0.1,
+        body_doping_cm3=1.0e16,
+        sd_doping_cm3=1.0e20,
+        temperature_k=300.0,
+        silicon_gate_metal_name="Ti"
+    )
+    device3 = Device(
+        gate_length_um=0.45,
+        source_length_um=0.45,
+        drain_length_um=0.5,
+        oxide_thickness_nm=5.0,
+        silicon_thickness_um=2.0,
+        junction_depth_um=0.1,
+        body_doping_cm3=1.0e16,
+        sd_doping_cm3=1.0e20,
+        temperature_k=300.0,
+        silicon_gate_metal_name="Ti"
+    )
+    
+    sim = MosfetSimulator(device1, name="silicon_thickness_0.3um")
+    sim.build()
+    sim.solve_equilibrium()
+    sim.enable_transport()
+
+    res1 = extract_all_metrics(sim)
+
+    sim = MosfetSimulator(device2, name="silicon_thickness_1.2um")
+    sim.build()
+    sim.solve_equilibrium()
+    sim.enable_transport()
+
+    res2 = extract_all_metrics(sim)
+
+    sim = MosfetSimulator(device3, name="silicon_thickness_2.0um")
+    sim.build()
+    sim.solve_equilibrium()
+    sim.enable_transport()
+
+    res3 = extract_all_metrics(sim)
+
+    print("Results for silicon_thickness_0.3um:", res1)
+    print("\n")
+    print("Results for silicon_thickness_1.2um:",  res2)
+    print("\n")
+    print("Results for silicon_thickness_2.0um:", res3)
+
+
+def test_source_lenght_um_effect():
+    
+    
+    device1 = Device(
+        gate_length_um=0.45,
+        source_length_um=0.2,
         drain_length_um=0.5,
         oxide_thickness_nm=5.0,
         silicon_thickness_um=0.5,
@@ -432,16 +500,219 @@ def main() -> None:
         silicon_gate_metal_name="Ti"
     )
 
+    device2 = Device(
+        gate_length_um=0.45,
+        source_length_um=0.6,
+        drain_length_um=0.5,
+        oxide_thickness_nm=5.0,
+        silicon_thickness_um=0.5,
+        junction_depth_um=0.1,
+        body_doping_cm3=1.0e16,
+        sd_doping_cm3=1.0e20,
+        temperature_k=300.0,
+        silicon_gate_metal_name="Ti"
+    )
+    device3 = Device(
+        gate_length_um=0.45,
+        source_length_um=1.0,
+        drain_length_um=0.5,
+        oxide_thickness_nm=5.0,
+        silicon_thickness_um=0.5,
+        junction_depth_um=0.1,
+        body_doping_cm3=1.0e16,
+        sd_doping_cm3=1.0e20,
+        temperature_k=300.0,
+        silicon_gate_metal_name="Ti"
+    )
+    
+    sim = MosfetSimulator(device1, name="source_length_0.2um")
+    sim.build()
+    sim.solve_equilibrium()
+    sim.enable_transport()
+
+    res1 = extract_all_metrics(sim)
+
+    sim = MosfetSimulator(device2, name="source_length_0.6um")
+    sim.build()
+    sim.solve_equilibrium()
+    sim.enable_transport()
+
+    res2 = extract_all_metrics(sim)
+
+    sim = MosfetSimulator(device3, name="source_length_1.0um")
+    sim.build()
+    sim.solve_equilibrium()
+    sim.enable_transport()
+
+    res3 = extract_all_metrics(sim)
+
+    print("Results for source_length_0.2um:", res1)
+    print("\n")
+    print("Results for source_length_0.6um:",  res2)
+    print("\n")
+    print("Results for source_length_1.0um:", res3)
+
+
+def test_body_doping_cm3_effect():
+    
+    device1 = Device(
+        gate_length_um=0.45,
+        source_length_um=0.45,
+        drain_length_um=0.5,
+        oxide_thickness_nm=5.0,
+        silicon_thickness_um=0.5,
+        junction_depth_um=0.1,
+        body_doping_cm3=1.0e14,
+        sd_doping_cm3=1.0e20,
+        temperature_k=300.0,
+        silicon_gate_metal_name="Ti"
+    )
+
+    device2 = Device(
+        gate_length_um=0.45,
+        source_length_um=0.45,
+        drain_length_um=0.5,
+        oxide_thickness_nm=5.0,
+        silicon_thickness_um=0.5,
+        junction_depth_um=0.1,
+        body_doping_cm3=5.0e15,
+        sd_doping_cm3=1.0e20,
+        temperature_k=300.0,
+        silicon_gate_metal_name="Ti"
+    )
+    
+    device3 = Device(
+        gate_length_um=0.45,
+        source_length_um=0.45,
+        drain_length_um=0.5,
+        oxide_thickness_nm=5.0,
+        silicon_thickness_um=0.5,
+        junction_depth_um=0.1,
+        body_doping_cm3=1.0e17,
+        sd_doping_cm3=1.0e20,
+        temperature_k=300.0,
+        silicon_gate_metal_name="Ti"
+    )
+    
+    sim = MosfetSimulator(device1, name="body_doping_1.0e14cm3")
+    sim.build()
+    sim.solve_equilibrium()
+    sim.enable_transport()
+
+    res1 = extract_all_metrics(sim)
+
+    sim = MosfetSimulator(device2, name="body_doping_5.0e15cm3")
+    sim.build()
+    sim.solve_equilibrium()
+    sim.enable_transport()
+
+    res2 = extract_all_metrics(sim)
+
+    sim = MosfetSimulator(device3, name="body_doping_1.0e17cm3")
+    sim.build()
+    sim.solve_equilibrium()
+    sim.enable_transport()
+
+    res3 = extract_all_metrics(sim)
+
+    print("Results for body_doping_1.0e14cm3:", res1)
+    print("\n")
+    print("Results for body_doping_5.0e15cm3:",  res2)
+    print("\n")
+    print("Results for body_doping_1.0e17cm3:", res3)
+
+def test_source_doping_cm3_effect():
+    
+    device1 = Device(
+        gate_length_um=0.45,
+        source_length_um=0.45,
+        drain_length_um=0.5,
+        oxide_thickness_nm=5.0,
+        silicon_thickness_um=0.5,
+        junction_depth_um=0.1,
+        body_doping_cm3=1.0e16,
+        sd_doping_cm3=1.0e18,
+        temperature_k=300.0,
+        silicon_gate_metal_name="Ti"
+    )
+
+    device2 = Device(
+        gate_length_um=0.45,
+        source_length_um=0.45,
+        drain_length_um=0.5,
+        oxide_thickness_nm=5.0,
+        silicon_thickness_um=0.5,
+        junction_depth_um=0.1,
+        body_doping_cm3=1.0e16,
+        sd_doping_cm3=5.0e19,
+        temperature_k=300.0,
+        silicon_gate_metal_name="Ti"
+    )
+    
+    device3 = Device(
+        gate_length_um=0.45,
+        source_length_um=0.45,
+        drain_length_um=0.5,
+        oxide_thickness_nm=5.0,
+        silicon_thickness_um=0.5,
+        junction_depth_um=0.1,
+        body_doping_cm3=1.0e16,
+        sd_doping_cm3=1.0e21,
+        temperature_k=300.0,
+        silicon_gate_metal_name="Ti"
+    )
+    
+    sim = MosfetSimulator(device1, name="source_doping_1.0e18cm3")
+    sim.build()
+    sim.solve_equilibrium()
+    sim.enable_transport()
+
+    res1 = extract_all_metrics(sim)
+
+    sim = MosfetSimulator(device2, name="body_doping_5.0e19cm3")
+    sim.build()
+    sim.solve_equilibrium()
+    sim.enable_transport()
+
+    res2 = extract_all_metrics(sim)
+
+    sim = MosfetSimulator(device3, name="body_doping_1.0e21cm3")
+    sim.build()
+    sim.solve_equilibrium()
+    sim.enable_transport()
+
+    res3 = extract_all_metrics(sim)
+
+    print("Results for body_doping_1.0e18cm3:", res1)
+    print("\n")
+    print("Results for body_doping_5.0e19cm3:",  res2)
+    print("\n")
+    print("Results for body_doping_1.0e21cm3:", res3)
+
+def main() -> None:
+
+    # This is default
+    device = Device(
+        gate_length_um=0.60,             # Lunghezza canale
+        source_length_um=0.45,
+        drain_length_um=0.5,
+        oxide_thickness_nm=4.5,          # Ridotto a 4.5 nm per abbassare SS e alzare Ion
+        silicon_thickness_um=0.5,
+        junction_depth_um=0.06,          # Ridotto da 0.1 a 0.06 um per abbattere Ioff_125C
+        body_doping_cm3=2e16,          # Calibrato per Vth ~ 0.45 V
+        sd_doping_cm3=1.0e20,
+        temperature_k=300.0,
+        silicon_gate_metal_name="W"    # TiN per Vth stabile
+    )
     # gate_length_um in range > 0.3um - Done!
-    # gate_oxide_thickness_nm in range > 4nm - Not Done
-    # junction_depth_um in range  0.02um - 0.25um - Not Done
-    # silicon_thickness_um in range 0.3um - 2.0um - Not Done 
-    # source/drain_length_um in range 0.2um - 1.0um - Not Done 
-    # body_doping_cm3 in range 1e14 - 1e17 - Not Done 
+    # gate_oxide_thickness_nm in range > 4nm - Done!
+    # junction_depth_um in range  0.02um - 0.25um - Done! -> Ho eliminato la funzione per sbaglio
+    # silicon_thickness_um in range 0.3um - 2.0um - Done!
+    # source/drain_length_um in range 0.2um - 1.0um - Done!
+    # body_doping_cm3 in range 1e14 - 1e17 - Done! 
     # sd_doping_cm3 in range 1e18 - 1e21 - Not Done 
 
     
-    test_gate_oxide_thickness_effect()
     
 
 
@@ -458,12 +729,12 @@ def main() -> None:
     #     silicon_gate_metal_name="Ti"
     # )
 
-    # sim = MosfetSimulator(device, name="NMOS")
-    # sim.build()
-    # sim.solve_equilibrium()
-    # sim.enable_transport()
+    sim = MosfetSimulator(device, name="NMOS")
+    sim.build()
+    sim.solve_equilibrium()
+    sim.enable_transport()
 
-    
+    print(extract_all_metrics(sim, verbosity=True))
 
 
     # curve = sim.sweep_idvg(vd=0.05, start=-1.0, stop=1.5, step=0.01)
