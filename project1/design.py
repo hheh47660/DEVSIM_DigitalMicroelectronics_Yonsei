@@ -20,7 +20,7 @@ import pandas as pd
 def extract_vth(sim, vd: float = 0.05, target_id: float = 1e-7, df: pd.DataFrame = None) -> float:
     """[1/8] Vth [V]: Tensione Vg per cui Id = 1e-7 A/um a Vd = 0.05 V."""
     if df is None:
-        df = sim.sweep_idvg(vd=vd, start=0.0, stop=2.0, step=0.02)
+        df = sim.sweep_idvg(vd=vd, start=-1.5, stop=2.0, step=0.02)
     vth = float(np.interp(target_id, df["Id_A_per_um"], df["Vg_V"]))
     return vth
 

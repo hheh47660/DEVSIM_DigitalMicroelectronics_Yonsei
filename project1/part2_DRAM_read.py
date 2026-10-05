@@ -16,22 +16,51 @@ W_UM = 0.1       # Pass TR width (100 nm = 0.1 um), fixed from project
 C_BL_F = 100e-15  # Bitline capacitance, given (absolute Farads)
 
 
-def run_dram_read_transient(sim, c_store_ff, initial_v_cell):
-    """
-    Executes the DRAM read simulation for 1 ns with 10 ps steps.
-    """
-    t_max_ps = 1000  # Total duration: 1 ns
-    dt_ps = 10        # Timestep: 10 ps
+def wait_and_read(sim, time_ps: float, timestep_ps: float,
+                     c_store_only: bool = False, c_store_f: float = None):
 
-    c_store_f = c_store_ff * 1e-15  # c_store_ff is already absolute, just fF -> F
+    time_steps = []
+    i_cell_data = []
+    v_bl_data = []
 
+    v_cell = sim.bias["source"]    
+    v_bl = sim.bias["drain"]
+
+    if c_store_f is None:
+        c_store_f = sim.plate_capacitance(2.0)
+
+    for t in range(0, time_ps, timestep_ps):
+
+        # Extract the current in A/um and scale by the absolute pass-TR width
+        i_cell_abs = sim.drain_current() * W_UM  # Absolute cell current (A)
+
+        delta_q = i_cell_abs * (timestep_ps * 1e-12)
+
+        v_cell += delta_q / c_store_f
+        if not c_store_only:
+            v_bl -= delta_q / C_BL_F
+
+        time_steps.append(t)
+        i_cell_data.append(i_cell_abs * 1e6)  # Convert to uA for the plot
+        v_bl_data.append(v_bl)
+
+        sim.set_bias("source", v_cell)
+        sim.set_bias("storage_l", v_cell)
+        sim.set_bias("storage_r", v_cell)
+        sim.set_bias("drain", v_bl)
+
+
+    return (time_steps, i_cell_data, v_bl_data)
+    
+
+def read_check(sim):
     # Initial conditions
     v_bl = 1.0
-    v_cell = initial_v_cell
+    v_cell = 0.0
     v_wl = 2.5
     v_body = -0.5
 
-    
+    c_store_f = sim.plate_capacitance(2.0)
 
     sim.set_bias("drain", v_bl)
     sim.set_bias("source", v_cell)
@@ -42,42 +71,37 @@ def run_dram_read_transient(sim, c_store_ff, initial_v_cell):
     sim.set_bias("gate", v_wl)
     sim.set_bias("body", v_body)
 
-    time_steps = []
-    i_cell_data = []
-    v_bl_data = []
+    t_0, i_0, v_0 = wait_and_read(sim, 1000, 10)
 
-    for t in range(0, t_max_ps, dt_ps):
-        sim.set_bias("source", v_cell)
-        sim.set_bias("storage_l", v_cell)
-        sim.set_bias("storage_r", v_cell)
-        sim.set_bias("drain", v_bl)
+    read_0_after_1ns = v_0[-1]
+    read_0_margin_mv = abs(read_0_after_1ns - 1.0) * 1000
 
-        # Extract the current in A/um and scale by the absolute pass-TR width
-        i_cell_per_um = sim.drain_current()
-        i_cell_abs = i_cell_per_um * W_UM  # Absolute cell current (A)
+    # Start to charge the capacitor
+    sim.set_bias("drain", 2.0)
+    _, _, tmp = wait_and_read(sim, 5 * 1000, 10, c_store_only = True, c_store_f = c_store_f)
 
-        delta_q = i_cell_abs * (dt_ps * 1e-12)
+    write_1_after_5ns = tmp[-1]
 
-        v_cell += delta_q / c_store_f
-        v_bl -= delta_q / C_BL_F
+    # Now read the logical 1
+    sim.set_bias("drain", v_bl)
+    t_1, i_1, v_1 = wait_and_read(sim, 1000, 10, c_store_f = c_store_f)
 
-        time_steps.append(t)
-        i_cell_data.append(i_cell_abs * 1e6)  # Convert to uA for the plot
-        v_bl_data.append(v_bl)
+    read_1_after_1ns = v_1[-1]
+    read_1_margin_mv = abs(read_1_after_1ns - 1.0) * 1000
 
-    # Final evaluation at time 1 ns
-    v_bl_final = v_bl_data[-1]
-    read_margin_mv = abs(v_bl_final - 1.0) * 1000
-
-    # Reuse the already-known c_store_f instead of re-measuring it (saves
-    # the two extra solves plate_capacitance() would otherwise cost here).
     retention_time = calculate_time_retention(sim, c_store_abs_f=c_store_f)
 
-    print(f"\n--- Results at {t_max_ps} ps ---")
-    print(f"Final V_BL: {v_bl_final:.4f} V")
-    print(f"Read margin (|V_BL - 1V|): {read_margin_mv:.2f} mV")
+    print(f"\n--- Results ---")
+    print(f"Final V_BL after read 0 for 1ns: {read_0_after_1ns:.4f} V")
+    print(f"Read 0 margin (|V_BL - 1V|): {read_0_margin_mv:.2f} mV")
     print("PASS: The read margin exceeded the 40 mV threshold."
-          if read_margin_mv >= 40.0
+          if read_0_margin_mv >= 40.0
+          else "FAIL: The read margin is insufficient (< 40 mV).")
+
+    print(f"Final V_BL after read 1 for 1ns: {read_1_after_1ns:.4f} V")
+    print(f"Read 1 margin (|V_BL - 1V|): {read_1_margin_mv:.2f} mV")
+    print("PASS: The read margin exceeded the 40 mV threshold."
+          if read_1_margin_mv >= 40.0
           else "FAIL: The read margin is insufficient (< 40 mV).")
 
     print(f"\nEstimated retention time: {retention_time:.4e} milliseconds")
@@ -85,7 +109,10 @@ def run_dram_read_transient(sim, c_store_ff, initial_v_cell):
           if retention_time > 64.0
           else "FAIL: The retention time is insufficient (< 64 ms).")
 
-    plot_results_matplotlib(time_steps, i_cell_data, v_bl_data)
+    plot_results_matplotlib(t_0, i_0, v_0)
+    plot_results_matplotlib(t_1, i_1, v_1)
+
+
 
 
 def plot_results_streamlit(time_steps, i_cell_data, v_bl_data):
@@ -131,8 +158,8 @@ def calculate_time_retention(sim, c_store_abs_f=None):
     sim.set_bias("source", 0.0)
     sim.set_bias("storage_l", 0.0)
     sim.set_bias("storage_r", 0.0)
-    sim.set_bias("plate_l", 1.0)
-    sim.set_bias("plate_r", 1.0)
+    sim.set_bias("plate_l", 0.0)
+    sim.set_bias("plate_r", 0.0)
     sim.set_bias("gate", 0.0)
     sim.set_bias("body", -0.5)
 
@@ -148,99 +175,34 @@ def calculate_time_retention(sim, c_store_abs_f=None):
     return time_retention_s * 1000  # Convert to milliseconds
 
 
-def run_dram_write_pulse(sim, c_store_abs_f=None, initial_v_cell=0.0,
-                         v_bl=2.0, v_wl=2.5, v_body=-0.5):
-    """
-    Simulates the 5 ns write pulse (BL=2V, WL=2.5V; the cell voltage reached
-    at the end of the pulse is the actual written '1' level). Per the
-    assignment, only C_STORE charges during the write -- unlike the read,
-    BL is actively driven to 2V by the write driver, so it is NOT treated
-    as a floating capacitor that drains into the cell: v_bl stays fixed.
-    Returns (written_v_cell, time_steps, v_cell_data).
-    """
-    t_max_ps = 5000  # 5 ns
-    dt_ps = 10         # same 10 ps stepping as the read
-
-    v_cell = initial_v_cell
-
-    sim.set_bias("drain", v_bl)
-    sim.set_bias("source", v_cell)
-    sim.set_bias("storage_l", v_cell)
-    sim.set_bias("storage_r", v_cell)
-    sim.set_bias("gate", v_wl)
-    sim.set_bias("body", v_body)
-    sim.set_bias("plate_l", 1.0)  # plate rail stays at VDD/2 = 1.0V throughout
-    sim.set_bias("plate_r", 1.0)
-
-    if c_store_abs_f is None:
-        c_store_per_um = sim.plate_capacitance(2.0)
-        c_store_abs_f = c_store_per_um * W_UM
-        # plate_capacitance() perturbs the plate bias to measure dQ/dV; restore it
-        sim.set_bias("plate_l", 1.0)
-        sim.set_bias("plate_r", 1.0)
-
-    time_steps = []
-    v_cell_data = []
-
-    for t in range(0, t_max_ps, dt_ps):
-        sim.set_bias("source", v_cell)
-        sim.set_bias("storage_l", v_cell)
-        sim.set_bias("storage_r", v_cell)
-        # drain stays fixed at v_bl -- unlike the read, BL is not drained here
-
-        i_cell_per_um = sim.drain_current()
-        i_cell_abs = i_cell_per_um * W_UM
-        delta_q = i_cell_abs * (dt_ps * 1e-12)
-
-        v_cell += delta_q / c_store_abs_f
-
-        time_steps.append(t)
-        v_cell_data.append(v_cell)
-
-    written_v_cell = v_cell_data[-1]
-    print(f"\n--- Write pulse results at {t_max_ps} ps ---")
-    print(f"Written '1' level: {written_v_cell:.4f} V "
-          f"(ideal target was {v_bl:.2f} V -- the pass transistor's Vth and "
-          f"body effect keep it below that)")
-
-    return written_v_cell, time_steps, v_cell_data
 
 
-def plot_write_pulse(time_steps, v_cell_data):
-    plt.figure(figsize=(6, 5))
-    plt.plot(time_steps, v_cell_data, color='green')
-    plt.xlabel('Time (ps)')
-    plt.ylabel('V_cell (V)')
-    plt.title('Write pulse: V_cell(t)')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+def quick_leakage_capacitance_check(sim):
+    sim.build(); sim.solve_equilibrium(); sim.enable_transport()
+    sim.set_bias("drain", 1.0); sim.set_bias("source", 0.0)
+    sim.set_bias("storage_l", 0.0); sim.set_bias("storage_r", 0.0)
+    sim.set_bias("gate", 0.0); sim.set_bias("body", -0.5)
+    i_leak = abs(sim.drain_current()) * W_UM
+    capacacitance = sim.plate_capacitance(2.0)
+    print(f"I_leak = {i_leak:.4e} A")
+    print(f"Plate_capacitance = {capacacitance:.4e} [Unit]")
+    return (i_leak, capacacitance)
 
-def run_impuse(sim):
-    # 1. Write the "1" level
-    written_v1, write_ts, write_vcell = run_dram_write_pulse(sim, c_store_abs_f=c_store_abs_ff * 1e-15)
-    plot_write_pulse(write_ts, write_vcell)
-
-    # 2. Read the "0" (already fatto)
-    run_dram_read_transient(sim, c_store_ff=c_store_abs_ff, initial_v_cell=0.0)
-
-    # 3. Read the "1" (usando il livello reale appena scritto, non 2.0V ideale)
-    run_dram_read_transient(sim, c_store_ff=c_store_abs_ff, initial_v_cell=written_v1)
 
 if __name__ == "__main__":
     device_cfg = Device(
-        gate_length_um=0.30,  # is fixed
+        gate_length_um=0.30,
         source_length_um=0.45,
         drain_length_um=0.5,
-        oxide_thickness_nm=6.0,
+        oxide_thickness_nm=5.0,
         silicon_thickness_um=0.5,
         junction_depth_um=0.1,
-        body_doping_cm3=1.0e16,
-        sd_doping_cm3=1.0e20,
-        temperature_k=398,  # Set the temperature to 125 degC (398 K)
-        silicon_gate_metal_name="Ti",
-        cap_height_um=0.8,
-        cap_dielectric_thickness_nm=5.0,
+        body_doping_cm3=1.0e16,       # tenuto come v1 (ottimo per retention)
+        sd_doping_cm3=1.0e19,
+        temperature_k=398,
+        silicon_gate_metal_name="TiN", # tenuto come v1, NON tornare a TaN
+        cap_height_um=1.5,             # massimo consentito (era 1.2 in v1)
+        cap_dielectric_thickness_nm=3.0,
         cap_dielectric_material="ZrO2")
 
     sim = MosfetSimulator(device_cfg, name="Project1")
@@ -256,10 +218,12 @@ if __name__ == "__main__":
     devsim.set_parameter(name="extended_solver", value=False)
     devsim.set_parameter(name="extended_model", value=False)
 
-    # Retrieve the absolute C_STORE in fF
-    c_store_abs_ff = sim.plate_capacitance(2.0) * W_UM * 1e15
-    print(f"Extracted storage capacitance: {c_store_abs_ff:.2f} fF")
+    read_check(sim)
 
-    run_dram_read_transient(sim, c_store_ff=c_store_abs_ff, initial_v_cell=2.0)
-
-    # Retention is already computed and printed inside run_dram_read_transient.
+    # retention_time   = calculate_time_retention(sim)
+    # print(f"\nEstimated retention time: {retention_time:.4e} milliseconds")
+    # print("PASS: The retention time exceeded the 64 ms threshold."
+    # if retention_time > 64.0
+    #     else "FAIL: The retention time is insufficient (< 64 ms).")
+    
+    
