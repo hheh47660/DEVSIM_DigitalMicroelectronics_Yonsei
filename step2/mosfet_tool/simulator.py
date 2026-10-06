@@ -257,16 +257,21 @@ class MosfetSimulator:
         )
 
         # Project 1 : Add p+ body tap doping
-        tap_doping = self.dev.body_tap_doping_cm3  
-        devsim.node_model(
-            device=self.name, region="bulk", name="BodyTapDoping",
-            equation=(f"0.25*{tap_doping:.6e}*erfc((x-{self.x_body_right:.6e})/{decay_x:.6e})"
-                    f"*erfc((y-{self.y_junction:.6e})/{decay_y:.6e})"),
-        )
+        # tap_doping = self.dev.body_tap_doping_cm3  
+        # devsim.node_model(
+        #     device=self.name, region="bulk", name="BodyTapDoping",
+        #     equation=(f"0.25*{tap_doping:.6e}*erfc((x-{self.x_body_right:.6e})/{decay_x:.6e})"
+        #             f"*erfc((y-{self.y_junction:.6e})/{decay_y:.6e})"),
+        # )
+
+        body_tap_expr = (f"0.25*{self.dev.body_tap_doping_cm3:.6e}*erfc((x-{self.x_body_right:.6e})/{decay_x:.6e})"
+                 f"*erfc((y-{self.y_junction:.6e})/{decay_y:.6e})")
+
         devsim.node_model(
             device=self.name, region="bulk", name="NetDoping",
-            equation=f"SourceDoping + DrainDoping - {na:.6e} - BodyTapDoping",
+            equation=f"SourceDoping + DrainDoping - {na:.6e} - ({body_tap_expr})",
         )
+        
 
     def _build_physics(self) -> None:
         # Project 1 : Add 128-bit extended precision for convergece

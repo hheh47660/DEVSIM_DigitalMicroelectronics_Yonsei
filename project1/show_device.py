@@ -100,22 +100,20 @@ def draw_mosfet_schema(sim, output_file="mosfet_schema.png"):
 
 def main():
     device = Device(
-        gate_length_um=0.65,
+        gate_length_um=0.30,
         source_length_um=0.45,
         drain_length_um=0.5,
         oxide_thickness_nm=5.0,
         silicon_thickness_um=0.5,
-        junction_depth_um=0.1,
-        body_doping_cm3=1.0e16,
-        sd_doping_cm3=1.0e20,
-        temperature_k=398,  # Imposta la temperatura a 125 °C (398 K) per la simulazione
-        silicon_gate_metal_name="Ti",
-        
+        junction_depth_um=0.08,          # <-- PORTATO A 0.08 per stabilizzare la reverse bias (V_body = -0.5V)
+        body_doping_cm3=7.0e16,
+        sd_doping_cm3=1.0e19,
+        temperature_k=398,
+        silicon_gate_metal_name="TiN",
         cap_height_um=0.8,
-        cap_dielectric_thickness_nm=5.0,
+        cap_dielectric_thickness_nm=4.5,
         cap_dielectric_material="ZrO2"
     )
-
     sim = MosfetSimulator(device, name="Project1")
     sim.build()
     draw_mosfet_schema(sim)

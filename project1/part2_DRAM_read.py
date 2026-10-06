@@ -78,9 +78,10 @@ def read_check(sim):
 
     # Start to charge the capacitor
     sim.set_bias("drain", 2.0)
-    _, _, tmp = wait_and_read(sim, 5 * 1000, 10, c_store_only = True, c_store_f = c_store_f)
+    t_m, i_m, v_m = wait_and_read(sim, 5 * 1000, 10, c_store_only = True, c_store_f = c_store_f)
 
-    write_1_after_5ns = tmp[-1]
+    cell_after_5ns = sim.bias["source"]
+    #write_1_after_5ns = v_m[-1]
 
     # Now read the logical 1
     sim.set_bias("drain", v_bl)
@@ -89,7 +90,7 @@ def read_check(sim):
     read_1_after_1ns = v_1[-1]
     read_1_margin_mv = abs(read_1_after_1ns - 1.0) * 1000
 
-    retention_time = calculate_time_retention(sim, c_store_abs_f=c_store_f)
+    # retention_time = calculate_time_retention(sim, c_store_abs_f=c_store_f)
 
     print(f"\n--- Results ---")
     print(f"Final V_BL after read 0 for 1ns: {read_0_after_1ns:.4f} V")
@@ -103,14 +104,36 @@ def read_check(sim):
     print("PASS: The read margin exceeded the 40 mV threshold."
           if read_1_margin_mv >= 40.0
           else "FAIL: The read margin is insufficient (< 40 mV).")
+    print(f"Cell after 5ns write: {cell_after_5ns}")
 
-    print(f"\nEstimated retention time: {retention_time:.4e} milliseconds")
-    print("PASS: The retention time exceeded the 64 ms threshold."
-          if retention_time > 64.0
-          else "FAIL: The retention time is insufficient (< 64 ms).")
+    # print(f"\nEstimated retention time: {retention_time:.4e} milliseconds")
+    # print("PASS: The retention time exceeded the 64 ms threshold."
+    #       if retention_time > 64.0
+    #       else "FAIL: The retention time is insufficient (< 64 ms).")
 
     plot_results_matplotlib(t_0, i_0, v_0)
     plot_results_matplotlib(t_1, i_1, v_1)
+
+  
+    t_m = [t + 1000 for t in t_m]
+    t_1 = [t + 1000 + 5 * 1000 for t in t_1]
+    
+    t_0.extend(t_m)
+    t_0.extend(t_1)
+
+    i_0.extend(i_m)
+    i_0.extend(i_1)
+
+    v_0.extend(v_m)
+    v_0.extend(v_1)
+    plot_results_matplotlib(t_0, i_0, v_0)
+
+    print(t_0)
+    print(i_0)
+    print(v_0)
+
+
+    
 
 
 
@@ -186,7 +209,8 @@ def quick_leakage_capacitance_check(sim):
     capacacitance = sim.plate_capacitance(2.0)
     print(f"I_leak = {i_leak:.4e} A")
     print(f"Plate_capacitance = {capacacitance:.4e} [Unit]")
-    return (i_leak, capacacitance)
+    time_retention = calculate_time_retention(sim, c_store_abs_f=capacacitance)
+    return (i_leak, capacacitance, time_retention)
 
 
 if __name__ == "__main__":
@@ -196,15 +220,15 @@ if __name__ == "__main__":
         drain_length_um=0.5,
         oxide_thickness_nm=5.0,
         silicon_thickness_um=0.5,
-        junction_depth_um=0.1,
-        body_doping_cm3=1.0e16,       # tenuto come v1 (ottimo per retention)
+        junction_depth_um=0.08,          # <-- PORTATO A 0.08 per stabilizzare la reverse bias (V_body = -0.5V)
+        body_doping_cm3=7.0e16,
         sd_doping_cm3=1.0e19,
         temperature_k=398,
-        silicon_gate_metal_name="TiN", # tenuto come v1, NON tornare a TaN
-        cap_height_um=1.5,             # massimo consentito (era 1.2 in v1)
-        cap_dielectric_thickness_nm=3.0,
-        cap_dielectric_material="ZrO2")
-
+        silicon_gate_metal_name="TiN",
+        cap_height_um=0.8,
+        cap_dielectric_thickness_nm=4.5,
+        cap_dielectric_material="ZrO2"
+    )
     sim = MosfetSimulator(device_cfg, name="Project1")
     sim.build()
     sim.solve_equilibrium()
@@ -214,16 +238,16 @@ if __name__ == "__main__":
     # solve; leaving it on for every one of the transient's ~100 solves
     # makes each one far slower than necessary. These are global DEVSIM
     # parameters (no device= argument), so one call here is enough.
-    devsim.set_parameter(name="extended_precision", value=False)
-    devsim.set_parameter(name="extended_solver", value=False)
-    devsim.set_parameter(name="extended_model", value=False)
+    devsim.set_parameter(name="extended_precision", value=True)
+    devsim.set_parameter(name="extended_solver", value=True)
+    devsim.set_parameter(name="extended_model", value=True)
 
-    read_check(sim)
+    # print(read_check(sim))
 
-    # retention_time   = calculate_time_retention(sim)
-    # print(f"\nEstimated retention time: {retention_time:.4e} milliseconds")
-    # print("PASS: The retention time exceeded the 64 ms threshold."
-    # if retention_time > 64.0
-    #     else "FAIL: The retention time is insufficient (< 64 ms).")
+    retention_time   = calculate_time_retention(sim)
+    print(f"\nEstimated retention time: {retention_time:.4e} milliseconds")
+    print("PASS: The retention time exceeded the 64 ms threshold."
+    if retention_time > 64.0
+        else "FAIL: The retention time is insufficient (< 64 ms).")
     
     
